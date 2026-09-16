@@ -1,4 +1,7 @@
 <script lang="ts">
+  // Read from the bundle rather than typed in, so the About line cannot
+  // fall behind the version the installer actually carries.
+  const APP_VERSION = __APP_VERSION__
   // OWNER: worker W6. The settings window — every control patches a real
   // settings field; nothing here is decorative.
 
@@ -21,6 +24,8 @@
     type UnlistenFn,
   } from '../lib/ipc'
   import { settings } from '../lib/stores/settings.svelte'
+  import { t } from '../lib/i18n/index.svelte'
+  import LanguagePicker from '../lib/components/LanguagePicker.svelte'
   import ThemePreview from '../lib/components/ThemePreview.svelte'
   import { THEMES } from '../lib/types'
   import type {
@@ -35,38 +40,41 @@
 
   type SectionId = 'general' | 'storage' | 'appearance' | 'privacy' | 'data' | 'about'
 
-  const SECTIONS: Array<{ id: SectionId; label: string }> = [
-    { id: 'general', label: 'General' },
-    { id: 'storage', label: 'Storage' },
-    { id: 'appearance', label: 'Appearance' },
-    { id: 'privacy', label: 'Privacy' },
-    { id: 'data', label: 'Data' },
-    { id: 'about', label: 'About' },
+  const SECTIONS: Array<{ id: SectionId; labelKey: string }> = [
+    { id: 'general', labelKey: 'settings.tab.general' },
+    { id: 'storage', labelKey: 'settings.tab.storage' },
+    { id: 'appearance', labelKey: 'settings.tab.appearance' },
+    { id: 'privacy', labelKey: 'settings.tab.privacy' },
+    { id: 'data', labelKey: 'settings.tab.data' },
+    { id: 'about', labelKey: 'settings.tab.about' },
   ]
 
   const MODIFIER_KEYS = new Set(['Control', 'Alt', 'Shift', 'Meta', 'CapsLock', 'NumLock', 'ScrollLock'])
 
-  const WIN_RESERVED_NAMES: Record<string, string> = {
-    v: 'Win+V is Windows’ clipboard history',
-    e: 'Win+E opens Explorer',
-    r: 'Win+R opens Run',
-    l: 'Win+L locks the screen',
-    d: 'Win+D shows the desktop',
-    i: 'Win+I opens Settings',
-    s: 'Win+S opens Search',
-    k: 'Win+K opens Cast',
-    g: 'Win+G opens Game Bar',
-    t: 'Win+T cycles the taskbar',
-    x: 'Win+X opens the Quick Link menu',
-    u: 'Win+U opens Accessibility',
-    w: 'Win+W opens Widgets',
-    a: 'Win+A opens Quick Settings',
-    h: 'Win+H opens Voice Typing',
-    f: 'Win+F opens Feedback',
-    m: 'Win+M minimizes all',
-    z: 'Win+Z opens Snap layouts',
-    p: 'Win+P opens Project',
-    y: 'Win+Y toggles Copilot',
+  // Keys, not resolved strings: this table is built once, when the window is
+  // created and before the language is known, so it stores what to look up
+  // rather than what it looked up.
+  const WIN_RESERVED_KEYS: Record<string, string> = {
+    v: 'hotkey.winV',
+    e: 'hotkey.winE',
+    r: 'hotkey.winR',
+    l: 'hotkey.winL',
+    d: 'hotkey.winD',
+    i: 'hotkey.winI',
+    s: 'hotkey.winS',
+    k: 'hotkey.winK',
+    g: 'hotkey.winG',
+    t: 'hotkey.winT',
+    x: 'hotkey.winX',
+    u: 'hotkey.winU',
+    w: 'hotkey.winW',
+    a: 'hotkey.winA',
+    h: 'hotkey.winH',
+    f: 'hotkey.winF',
+    m: 'hotkey.winM',
+    z: 'hotkey.winZ',
+    p: 'hotkey.winP',
+    y: 'hotkey.winY',
   }
 
   const KIND_COLORS: Record<string, string> = {
@@ -162,7 +170,7 @@
       if (MODIFIER_KEYS.has(e.key)) return
       const chord = formatChord(e)
       if (chord === null) {
-        hotkeyError = 'That key cannot be used as a hotkey. Use a letter, digit, or F1–F24.'
+        hotkeyError = t('hotkey.errInvalidKey')
         return
       }
       const reserved = checkReserved(e)
@@ -248,6 +256,12 @@
     return KIND_COLORS[k] ?? KIND_COLORS.other!
   }
 
+  /** The backend reports kinds as `image`, `text`, `link`, `file`, `video` and
+   * `other`; the storage legend shows them to the user, so they get names. */
+  function kindName(k: string): string {
+    return t(`kind.${k}`)
+  }
+
   // -- hotkey recording --------------------------------------------------------
 
   function formatChord(e: KeyboardEvent): string | null {
@@ -271,9 +285,10 @@
 
   function checkReserved(e: KeyboardEvent): string | null {
     if (!e.metaKey) return null
-    const name = WIN_RESERVED_NAMES[e.key.toLowerCase()]
-    if (name) {
-      return `${name} — Windows owns that chord and RegisterHotKey will refuse it. Switch on Aggressive mode to claim it anyway.`
+    const key = WIN_RESERVED_KEYS[e.key.toLowerCase()]
+    if (key) {
+      const name = t(key)
+      return t('hotkey.reservedChord', { name })
     }
     return null
   }
@@ -281,16 +296,16 @@
   function advisoryWarnings(e: KeyboardEvent, chord: string): string | null {
     const warns: string[] = []
     if (!e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
-      warns.push('A bare-key hotkey fires while you type — hold a modifier.')
+      warns.push(t('hotkey.warnBareKey'))
     }
     if (e.ctrlKey && !e.metaKey && ['c', 'x', 'v'].includes(e.key.toLowerCase())) {
-      warns.push('This intercepts the system copy/cut/paste shortcut.')
+      warns.push(t('hotkey.warnSystemCopy'))
     }
     if (e.metaKey) {
-      warns.push('Windows owns most Win+key chords; if registration fails, use Aggressive mode.')
+      warns.push(t('hotkey.warnWinChord'))
     }
     if (chord === 'Alt+V') {
-      warns.push('Alt+V is the default hotkey.')
+      warns.push(t('hotkey.infoDefault'))
     }
     return warns.length > 0 ? warns.join(' ') : null
   }
@@ -298,7 +313,7 @@
   // -- storage ------------------------------------------------------------------
 
   async function pickStoreLocation(): Promise<void> {
-    const dir = await open({ directory: true, title: 'Choose store location' })
+    const dir = await open({ directory: true, title: t('dialog.chooseStore') })
     if (!dir) return
     try {
       await relocateStore(dir)
@@ -353,9 +368,9 @@
 
   async function doExport(): Promise<void> {
     const target = await save({
-      title: 'Export Rebuffer data',
+      title: t('dialog.exportTitle'),
       defaultPath: 'rebuffer-export.rbx',
-      filters: [{ name: 'Rebuffer archive', extensions: ['rbx'] }],
+      filters: [{ name: t('dialog.archiveFilter'), extensions: ['rbx'] }],
     })
     if (!target) return
     try {
@@ -369,7 +384,7 @@
 
   async function doImport(): Promise<void> {
     const picked = await open({
-      title: 'Import Rebuffer data',
+      title: t('dialog.importTitle'),
       multiple: false,
       filters: [{ name: 'Rebuffer archive', extensions: ['rbx'] }],
     })
@@ -448,14 +463,14 @@ function resetEverything(): void {
   {#if error}
     <div class="error-banner" role="alert">
       <span>{error}</span>
-      <button onclick={() => { error = null }}>Dismiss</button>
+      <button onclick={() => { error = null }}>{t('settings.dismiss')}</button>
     </div>
   {/if}
 
   <nav>
     {#each SECTIONS as s}
       <button class:active={section === s.id} onclick={() => { section = s.id }}>
-        {s.label}
+        {t(s.labelKey)}
       </button>
     {/each}
   </nav>
@@ -463,20 +478,20 @@ function resetEverything(): void {
   <main class="content">
     {#if section === 'general'}
       <section>
-        <h2>General</h2>
+        <h2>{t('settings.tab.general')}</h2>
 
         <div class="field">
-          <span class="field-label">Hotkey</span>
+          <span class="field-label">{t('settings.hotkey')}</span>
           <div class="row">
-            <button class="hotkey-box" onclick={() => { recording = true }} title="Click, then press a chord" aria-label="Hotkey — click to record">
-              {recording ? 'Press a chord…' : settings.current.hotkey.binding}
+            <button class="hotkey-box" onclick={() => { recording = true }} title={t('settings.hotkeyHint')} aria-label={t('settings.hotkeyAria')}>
+              {recording ? t('settings.pressChord') : settings.current.hotkey.binding}
             </button>
             {#if !recording}
-              <button onclick={() => { recording = true }}>Record</button>
+              <button onclick={() => { recording = true }}>{t('settings.hotkeyRecord')}</button>
             {/if}
           </div>
           {#if recording}
-            <p class="hint">Press the combination now — Esc cancels.</p>
+            <p class="hint">{t('settings.hotkeyRecording')}</p>
           {/if}
           {#if hotkeyError}
             <p class="error">{hotkeyError}</p>
@@ -492,13 +507,11 @@ function resetEverything(): void {
             checked={settings.current.hotkey.aggressiveMode}
             onchange={(e) => patch({ hotkey: { aggressiveMode: e.currentTarget.checked } })}
           />
-          <span>Aggressive mode — low-level keyboard hook</span>
+          <span>{t('settings.aggressiveMode')}</span>
         </label>
         {#if settings.current.hotkey.aggressiveMode}
           <p class="hint">
-            The hook swallows the chord before Windows sees it (needed for chords the system owns,
-            like Win+V). Some antivirus products flag low-level keyboard hooks; the hook only
-            compares a combination and posts a message — it never logs.
+            {t('settings.aggressiveModeHint')}
           </p>
         {/if}
 
@@ -510,14 +523,10 @@ function resetEverything(): void {
               disabled={clipboardHistory === null}
               onchange={(e) => onClipboardHistoryChange(e.currentTarget.checked)}
             />
-            <span>Windows clipboard history (Win+V)</span>
+            <span>{t('settings.winV')}</span>
           </label>
           <p class="hint">
-            Turns Windows' own clipboard history on or off — the panel Win+V opens. It applies to
-            the current Windows user only, not other accounts. While it is off, Win+V no longer
-            opens Windows' clipboard history. Rebuffer's own clipboard capture is separate and
-            keeps working either way. Turning it on writes an explicit “on” value, the same way the
-            Windows Settings app does.
+            {t('settings.winVHint')}
           </p>
         </div>
 
@@ -527,7 +536,7 @@ function resetEverything(): void {
             checked={settings.current.behavior.launchOnStartup}
             onchange={(e) => patch({ behavior: { launchOnStartup: e.currentTarget.checked } })}
           />
-          <span>Launch on startup</span>
+          <span>{t('settings.launchOnStartup')}</span>
         </label>
 
         <label class="toggle">
@@ -536,7 +545,7 @@ function resetEverything(): void {
             checked={settings.current.behavior.silentStart}
             onchange={(e) => patch({ behavior: { silentStart: e.currentTarget.checked } })}
           />
-          <span>Start silently (no popup on launch)</span>
+          <span>{t('settings.silentStart')}</span>
         </label>
 
         <label class="toggle">
@@ -545,10 +554,10 @@ function resetEverything(): void {
             checked={settings.current.behavior.captureEnabled}
             onchange={(e) => onCaptureEnabled(e.currentTarget.checked)}
           />
-          <span>Clipboard capture</span>
+          <span>{t('settings.captureEnabled')}</span>
         </label>
         {#if !settings.current.behavior.captureEnabled}
-          <p class="hint">Capturing is paused; history and the hotkey still work.</p>
+          <p class="hint">{t('settings.capturePaused')}</p>
         {/if}
 
         <label class="toggle">
@@ -557,12 +566,11 @@ function resetEverything(): void {
             checked={settings.current.behavior.autoPaste}
             onchange={(e) => patch({ behavior: { autoPaste: e.currentTarget.checked } })}
           />
-          <span>Auto-paste after copy</span>
+          <span>{t('settings.autoPaste')}</span>
         </label>
         {#if settings.current.behavior.autoPaste}
           <p class="hint">
-            Sends Ctrl+V into the app you were using. If that app runs elevated, Windows blocks the
-            keystroke — the clipboard write still succeeds, so paste manually.
+            {t('settings.autoPasteHint')}
           </p>
         {/if}
 
@@ -572,7 +580,7 @@ function resetEverything(): void {
             checked={settings.current.behavior.pasteAsPlainText}
             onchange={(e) => patch({ behavior: { pasteAsPlainText: e.currentTarget.checked } })}
           />
-          <span>Paste as plain text by default</span>
+          <span>{t('settings.pastePlain')}</span>
         </label>
 
         <label class="toggle">
@@ -581,26 +589,26 @@ function resetEverything(): void {
             checked={settings.current.behavior.closeOnCopy}
             onchange={(e) => patch({ behavior: { closeOnCopy: e.currentTarget.checked } })}
           />
-          <span>Close the popup after copying</span>
+          <span>{t('settings.closeOnCopy')}</span>
         </label>
       </section>
 
     {:else if section === 'storage'}
       <section>
-        <h2>Storage</h2>
+        <h2>{t('settings.tab.storage')}</h2>
 
         <div class="field">
-          <span class="field-label">Store location</span>
+          <span class="field-label">{t('settings.storeLocation')}</span>
           <div class="row">
-            <code class="path">{settings.current.storage.path || 'Default — %APPDATA%\Rebuffer'}</code>
-            <button onclick={() => void pickStoreLocation()} aria-label="Change store location">Change…</button>
+            <code class="path">{settings.current.storage.path || t('settings.storeDefault')}</code>
+            <button onclick={() => void pickStoreLocation()} aria-label={t('settings.changeStoreAria')}>{t('settings.change')}</button>
           </div>
-          <p class="hint">Moving copies the database and every blob, verifies the copy, then deletes the old tree. A cancel rolls back.</p>
+          <p class="hint">{t('settings.storeLocationHint')}</p>
         </div>
 
         <div class="field">
           <label class="field-label">
-            Retention — keep items for
+            {t('settings.retention')}
             <span class="row">
               <input
                 type="number"
@@ -610,14 +618,14 @@ function resetEverything(): void {
                 onchange={(e) =>
                   patch({ storage: { retentionDays: clampInt(e.currentTarget.value, 1, 30) } })}
               />
-              <span>days</span>
+              <span>{t('settings.days')}</span>
             </span>
           </label>
         </div>
 
         <div class="field">
           <label class="field-label">
-            Keep extracted files for
+            {t('settings.tempFiles')}
             <span class="row">
               <input
                 type="number"
@@ -627,19 +635,17 @@ function resetEverything(): void {
                 onchange={(e) =>
                   patch({ storage: { tempFilesDays: clampInt(e.currentTarget.value, 1, 90) } })}
               />
-              <span>days</span>
+              <span>{t('settings.days')}</span>
             </span>
           </label>
           <p class="hint">
-            An item that exists only as clipboard data has no file until you open it, reveal it or
-            drag it out. One is written for you then, and this is how long it stays before it is
-            cleaned up.
+            {t('settings.tempFilesHint')}
           </p>
         </div>
 
         <div class="field">
           <label class="field-label">
-            Maximum item size
+            {t('settings.maxItemSize')}
             <span class="row">
               <input
                 type="number"
@@ -650,15 +656,15 @@ function resetEverything(): void {
                     storage: { maxItemBytes: Math.max(1, Number(e.currentTarget.value) || 1) * MB },
                   })}
               />
-              <span>MB</span>
+              <span>{t('settings.mb')}</span>
             </span>
           </label>
-          <p class="hint">Copies above this size are discarded before anything is written.</p>
+          <p class="hint">{t('settings.maxItemSizeHint')}</p>
         </div>
 
         <div class="field">
           <label class="field-label">
-            Store size cap
+            {t('settings.storeCap')}
             <span class="row">
               <input
                 type="number"
@@ -674,7 +680,7 @@ function resetEverything(): void {
                     },
                   })}
               />
-              <span>MB — empty means unlimited</span>
+              <span>{t('settings.storeCapUnit')}</span>
             </span>
           </label>
         </div>
@@ -685,20 +691,25 @@ function resetEverything(): void {
             checked={settings.current.storage.notifyWhenFull}
             onchange={(e) => patch({ storage: { notifyWhenFull: e.currentTarget.checked } })}
           />
-          <span>Notify when the store nears its cap</span>
+          <span>{t('settings.notifyFull')}</span>
         </label>
 
         <div class="usage">
           <div class="usage-head">
-            <span>Storage usage</span>
-            <span>{fmtBytes(stats?.totalBytes ?? 0)} · {stats?.totalItems ?? 0} items</span>
+            <span>{t('settings.storageUsage')}</span>
+            <span>
+              {t('settings.usageSummary', {
+                size: fmtBytes(stats?.totalBytes ?? 0),
+                count: stats?.totalItems ?? 0,
+              })}
+            </span>
           </div>
           <div class="meter">
             {#each usageSegments ?? [] as seg}
               <div
                 class="meter-seg"
                 style="width:{seg.pct}%;background:{kindColor(seg.kind)}"
-                title="{seg.kind} — {fmtBytes(seg.bytes)}"
+                title="{kindName(seg.kind)} — {fmtBytes(seg.bytes)}"
               ></div>
             {/each}
           </div>
@@ -706,7 +717,11 @@ function resetEverything(): void {
             {#each stats?.byKind ?? [] as k}
               <li>
                 <span class="dot" style="background:{kindColor(k.kind)}"></span>
-                {k.kind}: {k.count} items · {fmtBytes(k.bytes)}
+                {t('settings.usageKind', {
+                  kind: kindName(k.kind),
+                  count: k.count,
+                  size: fmtBytes(k.bytes),
+                })}
               </li>
             {/each}
           </ul>
@@ -718,37 +733,49 @@ function resetEverything(): void {
               value={cleanDays}
               onchange={(e) => { cleanDays = clampInt(e.currentTarget.value, 0, 3650) }}
             />
-            <span>Clean items older than this many days now</span>
-            <button onclick={() => void runClean()}>Clean now</button>
+            <span>{t('settings.cleanOlder')}</span>
+            <button onclick={() => void runClean()}>{t('settings.cleanNow')}</button>
           </div>
           {#if cleanup}
-            <p class="ok">Removed {cleanup.removedItems} items · freed {fmtBytes(cleanup.freedBytes)}.</p>
+            <p class="ok">
+              {t('settings.cleanupDone', {
+                count: cleanup.removedItems,
+                size: fmtBytes(cleanup.freedBytes),
+              })}
+            </p>
           {/if}
         </div>
       </section>
 
     {:else if section === 'appearance'}
       <section>
-        <h2>Appearance</h2>
+        <h2>{t('settings.tab.appearance')}</h2>
 
         <div class="field">
-          <span class="field-label">Theme</span>
-          <div class="theme-strip" role="group" aria-label="Theme">
-            {#each THEMES as t}
+          <span class="field-label">{t('settings.theme')}</span>
+          <div class="theme-strip" role="group" aria-label={t('settings.theme')}>
+            {#each THEMES as themeName}
               <ThemePreview
-                theme={t}
-                selected={settings.current.appearance.theme === t}
+                theme={themeName}
+                selected={settings.current.appearance.theme === themeName}
                 onselect={(v) => patch({ appearance: { theme: v } })}
               />
             {/each}
           </div>
-          <p class="hint">
-            Applies to both windows immediately. Each theme brings its own accent.
-          </p>
+          <p class="hint">{t('settings.themeHint')}</p>
         </div>
 
         <div class="field">
-          <span class="field-label">Popup window size</span>
+          <span class="field-label">{t('settings.language')}</span>
+          <LanguagePicker
+            value={settings.current.appearance.language}
+            onselect={(v) => patch({ appearance: { language: v } })}
+          />
+          <p class="hint">{t('settings.languageHint')}</p>
+        </div>
+
+        <div class="field">
+          <span class="field-label">{t('settings.popupSize')}</span>
           <div class="radios">
             <label>
               <input
@@ -757,7 +784,7 @@ function resetEverything(): void {
                 checked={settings.current.window.sizeMode === 'percent'}
                 onchange={() => patch({ window: { sizeMode: 'percent' } })}
               />
-              Percent of monitor
+              {t('settings.percentOfMonitor')}
             </label>
             <label>
               <input
@@ -766,7 +793,7 @@ function resetEverything(): void {
                 checked={settings.current.window.sizeMode === 'fixed'}
                 onchange={() => patch({ window: { sizeMode: 'fixed' } })}
               />
-              Fixed size
+              {t('settings.fixedSize')}
             </label>
           </div>
         </div>
@@ -774,7 +801,7 @@ function resetEverything(): void {
         {#if settings.current.window.sizeMode === 'percent'}
           <div class="field">
             <label class="field-label">
-              Percent of monitor
+              {t('settings.percentOfMonitor')}
               <input
                 type="number"
                 min={10}
@@ -787,14 +814,14 @@ function resetEverything(): void {
           </div>
         {:else}
           <div class="field">
-            <span class="field-label">Fixed width × height (px)</span>
+            <span class="field-label">{t('settings.fixedWidthHeight')}</span>
             <div class="row">
               <input
                 type="number"
                 min={320}
                 max={3840}
                 value={settings.current.window.fixed.width}
-                aria-label="Fixed width"
+                aria-label={t('settings.fixedWidth')}
                 onchange={(e) =>
                   patch({
                     window: {
@@ -811,7 +838,7 @@ function resetEverything(): void {
                 min={320}
                 max={2160}
                 value={settings.current.window.fixed.height}
-                aria-label="Fixed height"
+                aria-label={t('settings.fixedHeight')}
                 onchange={(e) =>
                   patch({
                     window: {
@@ -833,19 +860,16 @@ function resetEverything(): void {
               checked={settings.current.window.dragBar}
               onchange={(e) => patch({ window: { dragBar: e.currentTarget.checked } })}
             />
-            <span>Drag bar on the popup</span>
+            <span>{t('settings.dragBar')}</span>
           </label>
           <p class="hint">
-            Adds an empty strip along the top of the popup. Hold the left mouse button on it to
-            move the window. The window grows by the strip's height, so the list keeps the size
-            you set above. The popup still opens at the cursor every time, so a window you moved
-            comes back to the pointer on the next hotkey.
+            {t('settings.dragBarHint')}
           </p>
         </div>
 
         <div class="field">
           <label class="field-label">
-            Grid zoom (1–5)
+            {t('settings.gridZoom')}
             <input
               type="number"
               min={1}
@@ -863,12 +887,12 @@ function resetEverything(): void {
             checked={settings.current.appearance.showAge}
             onchange={(e) => patch({ appearance: { showAge: e.currentTarget.checked } })}
           />
-          <span>Show relative age on cards</span>
+          <span>{t('settings.showAge')}</span>
         </label>
 
         <div class="field">
           <label class="field-label">
-            Format label size
+            {t('settings.formatLabel')}
             <select
               value={settings.current.appearance.formatLabelSize}
               onchange={(e) =>
@@ -878,10 +902,10 @@ function resetEverything(): void {
                   },
                 })}
             >
-              <option value="off">Off</option>
-              <option value="small">Small</option>
-              <option value="medium">Medium</option>
-              <option value="large">Large</option>
+              <option value="off">{t('settings.sizeOff')}</option>
+              <option value="small">{t('settings.sizeSmall')}</option>
+              <option value="medium">{t('settings.sizeMedium')}</option>
+              <option value="large">{t('settings.sizeLarge')}</option>
             </select>
           </label>
         </div>
@@ -892,7 +916,7 @@ function resetEverything(): void {
             checked={settings.current.appearance.animateGifs}
             onchange={(e) => patch({ appearance: { animateGifs: e.currentTarget.checked } })}
           />
-          <span>Animate GIF previews</span>
+          <span>{t('settings.animateGifs')}</span>
         </label>
 
         <label class="toggle">
@@ -901,16 +925,16 @@ function resetEverything(): void {
             checked={settings.current.appearance.reduceMotion}
             onchange={(e) => patch({ appearance: { reduceMotion: e.currentTarget.checked } })}
           />
-          <span>Reduce motion</span>
+          <span>{t('settings.reduceMotion')}</span>
         </label>
 
         <div class="field">
-          <span class="field-label">Accent color</span>
+          <span class="field-label">{t('settings.accent')}</span>
           <div class="row">
             <input
               type="color"
               value={effectiveAccent}
-              aria-label="Accent color"
+              aria-label={t('settings.accent')}
               onchange={(e) => patch({ appearance: { accent: e.currentTarget.value } })}
             />
             <code>{settings.current.appearance.accent || effectiveAccent}</code>
@@ -920,7 +944,7 @@ function resetEverything(): void {
                 class="linkish"
                 onclick={() => patch({ appearance: { accent: '' } })}
               >
-                Follow theme
+                {t('settings.followTheme')}
               </button>
             {/if}
           </div>
@@ -934,7 +958,7 @@ function resetEverything(): void {
 
     {:else if section === 'privacy'}
       <section>
-        <h2>Privacy</h2>
+        <h2>{t('settings.tab.privacy')}</h2>
 
         <label class="toggle">
           <input
@@ -942,11 +966,10 @@ function resetEverything(): void {
             checked={settings.current.privacy.respectClipboardFlags}
             onchange={(e) => patch({ privacy: { respectClipboardFlags: e.currentTarget.checked } })}
           />
-          <span>Respect apps’ “exclude from clipboard history” flags</span>
+          <span>{t('settings.respectFlags')}</span>
         </label>
         <p class="hint">
-          Apps like password managers mark their copies so history tools skip them. Without this,
-          the store becomes a plaintext password log.
+          {t('settings.respectFlagsHint')}
         </p>
 
         <label class="toggle">
@@ -955,20 +978,15 @@ function resetEverything(): void {
             checked={settings.current.privacy.linkPreviews}
             onchange={(e) => patch({ privacy: { linkPreviews: e.currentTarget.checked } })}
           />
-          <span>Look up what a copied link points at</span>
+          <span>{t('settings.linkPreviews')}</span>
         </label>
         <p class="hint">
-          A copied YouTube link gets the video's real name and its thumbnail instead of a bare
-          youtube.com. The lookup happens once, when the link is captured, and the result is
-          stored, so opening the window later contacts nobody. Switching this on also looks up
-          the YouTube links already in your history. Nothing else is looked up: only
-          youtube.com, youtu.be and youtube-nocookie.com are ever contacted, and only with the
-          link itself.
+          {t('settings.linkPreviewsHint')}
         </p>
 
         <div class="field">
-          <span class="field-label">Blocked processes</span>
-          <p class="hint">Copies made while one of these processes is in the foreground are ignored.</p>
+          <span class="field-label">{t('settings.blockedProcesses')}</span>
+          <p class="hint">{t('settings.blockedHint')}</p>
           <ul class="blocked-list">
             {#each settings.current.privacy.blockedProcesses as p}
               <li>
@@ -980,7 +998,7 @@ function resetEverything(): void {
           <div class="row">
             <input
               type="text"
-              placeholder="process.exe"
+              placeholder={t('settings.processPlaceholder')}
               bind:value={newBlocked}
               onkeydown={(e) => {
                 if (e.key === 'Enter') {
@@ -989,28 +1007,27 @@ function resetEverything(): void {
                 }
               }}
             />
-            <button onclick={addBlocked}>Add</button>
+            <button onclick={addBlocked}>{t('settings.add')}</button>
           </div>
         </div>
       </section>
 
     {:else if section === 'data'}
       <section>
-        <h2>Data</h2>
+        <h2>{t('settings.tab.data')}</h2>
 
         <div class="field">
-          <span class="field-label">Export</span>
+          <span class="field-label">{t('settings.export')}</span>
           <p class="hint">
-            Writes a .rbx archive containing your settings, every item, and all blobs. It holds your
-            full clipboard history in the clear — keep it somewhere safe.
+            {t('settings.exportHint')}
           </p>
           <div class="row">
-            <button onclick={() => void doExport()}>Export…</button>
+            <button onclick={() => void doExport()}>{t('settings.exportButton')}</button>
           </div>
         </div>
 
         <div class="field">
-          <span class="field-label">Import</span>
+          <span class="field-label">{t('settings.import')}</span>
           <div class="radios">
             <label>
               <input
@@ -1019,7 +1036,7 @@ function resetEverything(): void {
                 checked={importMode === 'merge'}
                 onchange={() => { importMode = 'merge' }}
               />
-              Merge — skip items already stored
+              {t('settings.importMerge')}
             </label>
             <label>
               <input
@@ -1028,19 +1045,18 @@ function resetEverything(): void {
                 checked={importMode === 'replace'}
                 onchange={() => { importMode = 'replace' }}
               />
-              Replace — wipes current history
+              {t('settings.importReplace')}
             </label>
           </div>
           <div class="row">
-            <button onclick={() => void doImport()}>Import…</button>
+            <button onclick={() => void doImport()}>{t('settings.importButton')}</button>
           </div>
         </div>
 
         <div class="field">
-          <span class="field-label">Clear history</span>
+          <span class="field-label">{t('settings.clearHistory')}</span>
           <p class="hint">
-            Removes every captured item except pinned ones and manual shelf references. This cannot
-            be undone.
+            {t('settings.clearHistoryHint')}
           </p>
           <div class="row">
             <button class="danger" onclick={clearHistoryNow}>
@@ -1050,10 +1066,9 @@ function resetEverything(): void {
         </div>
 
         <div class="field">
-          <span class="field-label">Reset everything</span>
+          <span class="field-label">{t('settings.resetAll')}</span>
           <p class="hint">
-            Removes everything, including pinned items and manual shelf references. This cannot be
-            undone.
+            {t('settings.resetAllHint')}
           </p>
           <div class="row">
             <button class="danger" onclick={resetEverything}>
@@ -1065,12 +1080,11 @@ function resetEverything(): void {
 
     {:else}
       <section>
-        <h2>About</h2>
+        <h2>{t('settings.tab.about')}</h2>
         <p class="about-name">Rebuffer</p>
-        <p class="hint">Version 0.1.0</p>
+        <p class="hint">{t('settings.version', { version: APP_VERSION })}</p>
         <p class="hint">
-          A fast, persistent clipboard history for Windows. Everything you copy stays for 30 days
-          and comes back with one hotkey.
+          {t('settings.aboutBody')}
         </p>
       </section>
     {/if}
@@ -1094,11 +1108,11 @@ function resetEverything(): void {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    border-right: 1px solid var(--border-1, rgba(255, 255, 255, 0.08));
+    border-inline-end: 1px solid var(--border-1, rgba(255, 255, 255, 0.08));
   }
 
   nav button {
-    text-align: left;
+    text-align: start;
     padding: 8px 12px;
     border: none;
     border-radius: 8px;

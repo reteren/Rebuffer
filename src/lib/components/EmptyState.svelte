@@ -1,17 +1,21 @@
 <script lang="ts">
+  import { t } from '../i18n/index.svelte'
   import type { TabId } from '../types'
 
   let { tab }: { tab: TabId } = $props()
 
-  const COPY: Record<TabId, { title: string; hint: string }> = {
-    all: { title: 'Nothing here yet', hint: 'Copy anything - text, images, files - and it lands here.' },
-    images: { title: 'No images yet', hint: 'Screenshots and pictures you copy will show up here.' },
-    text: { title: 'No text yet', hint: 'Text you copy appears here, searchable in an instant.' },
-    links: { title: 'No links yet', hint: 'Copied URLs collect in this tab.' },
-    files: { title: 'No files yet', hint: 'Files copied from Explorer appear here.' },
-    references: { title: 'Nothing added yet', hint: 'Use + Add to keep a file here by reference - it is never copied and never expires.' },
-    pinned: { title: 'Nothing pinned', hint: 'Pin an item to keep it safe from cleanup.' },
-  }
+  // $derived, not a plain const: a const is evaluated once when the component
+  // is created, which is before the settings round-trip has said what language
+  // this is. It would freeze the English it was built with.
+  const COPY: Record<TabId, { title: string; hint: string }> = $derived({
+    all: { title: t('empty.allTitle'), hint: t('empty.allBody') },
+    images: { title: t('empty.imagesTitle'), hint: t('empty.imagesBody') },
+    text: { title: t('empty.textTitle'), hint: t('empty.textBody') },
+    links: { title: t('empty.linksTitle'), hint: t('empty.linksBody') },
+    files: { title: t('empty.filesTitle'), hint: t('empty.filesBody') },
+    references: { title: t('empty.referencesTitle'), hint: t('empty.referencesBody') },
+    pinned: { title: t('empty.pinnedTitle'), hint: t('empty.pinnedBody') },
+  })
 
   const ICONS: Record<TabId, string> = {
     all: '<rect x="4.5" y="4.5" width="15" height="15" rx="2"/><path d="M9 9.5h6M9 13h6M9 16.5h4"/>',

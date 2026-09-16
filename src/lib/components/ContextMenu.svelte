@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n/index.svelte'
   import type { ItemDto } from '../types'
 
   export type MenuAction =
@@ -33,17 +34,17 @@
   }
 
   const entries = $derived.by((): Entry[] => {
-    const out: Entry[] = [{ id: 'copy', label: 'Copy' }]
-    if (item.subKind === 'rich') out.push({ id: 'copyPlain', label: 'Copy as plain text' })
+    const out: Entry[] = [{ id: 'copy', label: t('menu.copy') }]
+    if (item.subKind === 'rich') out.push({ id: 'copyPlain', label: t('menu.copyPlain') })
     if (item.kind === 'image' || item.kind === 'video' || item.kind === 'file') {
-      out.push({ id: 'open', label: 'Open' })
-      out.push({ id: 'openWith', label: 'Open with' })
+      out.push({ id: 'open', label: t('menu.open') })
+      out.push({ id: 'openWith', label: t('menu.openWith') })
     }
-    out.push(item.pinned ? { id: 'unpin', label: 'Unpin' } : { id: 'pin', label: 'Pin' })
-    out.push({ id: 'saveAs', label: 'Save as' })
-    out.push({ id: 'reveal', label: 'Show in folder' })
-    out.push({ id: 'rename', label: 'Rename' })
-    out.push({ id: 'delete', label: 'Delete', danger: true })
+    out.push(item.pinned ? { id: 'unpin', label: t('menu.unpin') } : { id: 'pin', label: t('menu.pin') })
+    out.push({ id: 'saveAs', label: t('menu.saveAs') })
+    out.push({ id: 'reveal', label: t('menu.showInFolder') })
+    out.push({ id: 'rename', label: t('menu.rename') })
+    out.push({ id: 'delete', label: t('menu.delete'), danger: true })
     return out
   })
 
@@ -104,7 +105,7 @@
   style="left:{x}px; top:{y}px; translate:{-dx}px {-dy}px"
   role="menu"
   tabindex="-1"
-  aria-label="Item actions"
+  aria-label={t('menu.ariaLabel')}
   oncontextmenu={(e) => e.preventDefault()}
 >
   {#each entries as e}
@@ -139,7 +140,7 @@
     font-family: var(--font-mono);
     font-size: var(--fs-xs);
     line-height: 1.45;
-    text-align: left;
+    text-align: start;
     /* A URL has no spaces to break at, so it must be allowed to break
        anywhere; five lines is more than any address worth reading. */
     overflow-wrap: anywhere;
@@ -187,7 +188,7 @@
   .item {
     display: block;
     width: 100%;
-    text-align: left;
+    text-align: start;
     padding: 7px 10px;
     border: none;
     border-radius: var(--r-sm);

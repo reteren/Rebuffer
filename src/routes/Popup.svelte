@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../lib/i18n/index.svelte'
   // OWNER: worker W6. The popup: where the items/selection/settings stores
   // meet W5's component kit. No component calls invoke; this file is the only
   // consumer of both sides.
@@ -404,7 +405,7 @@
   }
 
   async function onAdd(): Promise<void> {
-    const picked = await open({ multiple: true, directory: false, title: 'Add to Rebuffer' })
+    const picked = await open({ multiple: true, directory: false, title: t('popup.addToRebuffer') })
     if (picked && picked.length > 0) {
       try {
         await addFiles(picked)
@@ -548,9 +549,9 @@
         break
       case 'saveAs': {
         const target = await save({
-          title: 'Save item as…',
+          title: t('popup.saveItemAs'),
           defaultPath: suggestName(item),
-          filters: [{ name: 'All files', extensions: ['*'] }],
+          filters: [{ name: t('popup.allFiles'), extensions: ['*'] }],
         })
         if (target) {
           try {
@@ -602,13 +603,13 @@
   {#if error}
     <div class="banner error" role="alert">
       <span>{error}</span>
-      <button onclick={() => { error = null }}>Dismiss</button>
+      <button onclick={() => { error = null }}>{t('popup.dismiss')}</button>
     </div>
   {/if}
   {#if warning}
     <div class="banner" class:report={warning.kind === 'report'} role="alert">
       <span>{warning.text}</span>
-      <button onclick={() => { warning = null }}>Dismiss</button>
+      <button onclick={() => { warning = null }}>{t('popup.dismiss')}</button>
     </div>
   {/if}
 
@@ -631,7 +632,7 @@
   <div
     class="grid-viewport"
     role="group"
-    aria-label="Clipboard items"
+    aria-label="{t('popup.items')}"
     bind:this={gridEl}
     bind:clientWidth={gridWidth}
     ondragstart={onDragStart}
@@ -663,8 +664,8 @@
     <div class="corner">
       <button
         class="icon-btn"
-        aria-label="Open settings"
-        title="Settings"
+        aria-label="{t('popup.openSettings')}"
+        title={t('tray.settings')}
         onclick={() => void showSettingsWindow()}
       >
         <!-- The user's gear, traced from their reference: eight teeth at 45
@@ -689,17 +690,17 @@
   {/if}
 
   {#if renameTarget}
-    <div class="rename-overlay" role="dialog" aria-label="Rename item">
+    <div class="rename-overlay" role="dialog" aria-label="{t('popup.renameItem')}">
       <div class="rename-box">
         <input
           id="rename-input"
           bind:value={renameValue}
-          placeholder="Display title"
+          placeholder="{t('popup.displayTitle')}"
           spellcheck="false"
         />
         <div class="rename-actions">
-          <button class="primary" onclick={() => void doRename()}>Rename</button>
-          <button onclick={() => { renameTarget = null }}>Cancel</button>
+          <button class="primary" onclick={() => void doRename()}>{t('popup.rename')}</button>
+          <button onclick={() => { renameTarget = null }}>{t('popup.cancel')}</button>
         </div>
       </div>
     </div>

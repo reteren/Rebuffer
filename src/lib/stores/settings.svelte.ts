@@ -2,7 +2,8 @@
 // update_settings, re-synced live on `settings-changed` so an external edit of
 // settings.json shows up without a reload.
 
-import { getSettings, onSettingsChanged, updateSettings } from '../ipc'
+import { setLanguage, setSystemLanguages } from '../i18n/index.svelte'
+import { getSettings, getSystemLanguages, onSettingsChanged, updateSettings } from '../ipc'
 import { THEMES, type Settings, type SettingsPatch, type Theme } from '../types'
 
 /** Mirrors the appearance fields that drive document-level styling. */
@@ -29,6 +30,13 @@ function applyAppearance(a: Settings['appearance']): void {
   // global.css ships a reduced-motion override keyed on this attribute.
   if (a.reduceMotion) root.setAttribute('data-reduce-motion', '')
   else root.removeAttribute('data-reduce-motion')
+
+  // The language is appearance too: it is how the app presents itself, it
+  // changes both windows the instant it is set, and like the theme it has to
+  // be re-applied whenever settings arrive — on load, on a patch, and when
+  // another window edits settings.json underneath this one. `setLanguage` also
+  // puts `lang` and `dir` on the document, which is what turns Arabic around.
+  setLanguage(a.language)
 }
 
 /** Mirrors src-tauri/src/settings.rs defaults so the UI renders before the
@@ -63,6 +71,7 @@ export const DEFAULT_SETTINGS: Settings = {
   appearance: {
     showAge: true,
     formatLabelSize: 'medium',
+    language: 'system',
     animateGifs: true,
     reduceMotion: false,
     theme: 'darkblue',
@@ -127,6 +136,16 @@ class SettingsStore {
         await new Promise((r) => setTimeout(r, 250))
       }
     }
+    // Which language `"system"` means is the OS's answer, not the WebView's:
+    // navigator.language is en-US inside WebView2 whatever Windows is set to.
+    // It has to be in hand before the first applyAppearance, or a window whose
+    // language is "system" paints English and then corrects itself.
+    try {
+      setSystemLanguages(await getSystemLanguages())
+    } catch {
+      // Unreachable backend; systemLocale() falls back to navigator.
+    }
+
     applyAppearance(this.current.appearance)
     this.unlisten?.()
     this.unlisten = await onSettingsChanged((next) => {

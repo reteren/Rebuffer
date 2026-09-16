@@ -1,17 +1,20 @@
 <script lang="ts">
+  import { t } from '../i18n/index.svelte'
   import type { TabId } from '../types'
 
   // 'Added Files' sits next to 'Files' (both are the file-ish affordance — the
   // shelf is filled through + Add) and before 'Pinned', the cross-cutting bucket.
   const TABS: TabId[] = ['all', 'images', 'text', 'links', 'files', 'references', 'pinned']
-  const LABELS: Record<TabId, string> = {
-    all: 'All',
-    images: 'Images',
-    text: 'Text',
-    links: 'Links',
-    files: 'Files',
-    references: 'Added Files',
-    pinned: 'Pinned',
+  // Keyed rather than spelled out: the label has to follow the language, and
+  // reading it through `t` at render time is what makes it do that.
+  const LABEL_KEYS: Record<TabId, string> = {
+    all: 'tabs.all',
+    images: 'tabs.images',
+    text: 'tabs.text',
+    links: 'tabs.links',
+    files: 'tabs.files',
+    references: 'tabs.references',
+    pinned: 'tabs.pinned',
   }
 
   let {
@@ -25,7 +28,7 @@
   } = $props()
 </script>
 
-<div class="tabs" role="tablist" aria-label="Filter by type">
+<div class="tabs" role="tablist" aria-label={t('tabs.ariaLabel')}>
   {#each TABS as tab}
     <button
       type="button"
@@ -35,7 +38,7 @@
       aria-selected={tab === active}
       onclick={() => onselect?.(tab)}
     >
-      <span class="label">{LABELS[tab]}</span>
+      <span class="label">{t(LABEL_KEYS[tab])}</span>
       <span class="count">{counts[tab].toLocaleString('en-US')}</span>
     </button>
   {/each}

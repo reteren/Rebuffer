@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte'
   import Card from './Card.svelte'
+  import { locale, t } from '../i18n/index.svelte'
   import type { ItemDto } from '../types'
 
   interface Props {
@@ -75,13 +76,14 @@
     const now = new Date()
     const day = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())
     const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
-    if (day === today) return 'Today'
-    if (day === today - 86_400_000) return 'Yesterday'
+    if (day === today) return t('grid.today')
+    if (day === today - 86_400_000) return t('grid.yesterday')
     const opts: Intl.DateTimeFormatOptions =
       d.getFullYear() === now.getFullYear()
         ? { day: 'numeric', month: 'long' }
         : { day: 'numeric', month: 'long', year: 'numeric' }
-    return d.toLocaleDateString('en-GB', opts)
+    // The month name belongs to the interface language, not to en-GB.
+    return d.toLocaleDateString(locale(), opts)
   }
 
   interface GroupInfo {

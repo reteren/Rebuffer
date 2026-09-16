@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n/index.svelte'
   interface Props {
     value: number
     onchange?: (n: number) => void
@@ -76,12 +77,12 @@
   class="dial"
   class:dragging
   role="slider"
-  aria-label="Zoom"
+  aria-label={t('zoom.ariaLabel')}
   aria-valuemin={MIN}
   aria-valuemax={MAX}
   aria-valuenow={level}
   tabindex="0"
-  title="Drag or scroll to zoom"
+  title={t('zoom.hint')}
   onkeydown={onKeydown}
   onpointerdown={onPointerDown}
   onpointermove={onPointerMove}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../lib/i18n/index.svelte'
   import { getCurrentWindow } from '@tauri-apps/api/window'
   import {
     getCaptureEnabled,
@@ -65,7 +66,7 @@
     <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
       <path fill="currentColor" fill-rule="evenodd" d="M9.94 3.75 L9.82 0.23 L14.18 0.23 L14.06 3.75 A8.50 8.50 0 0 1 16.38 4.71 L18.78 2.14 L21.86 5.22 L19.29 7.62 A8.50 8.50 0 0 1 20.25 9.94 L23.77 9.82 L23.77 14.18 L20.25 14.06 A8.50 8.50 0 0 1 19.29 16.38 L21.86 18.78 L18.78 21.86 L16.38 19.29 A8.50 8.50 0 0 1 14.06 20.25 L14.18 23.77 L9.82 23.77 L9.94 20.25 A8.50 8.50 0 0 1 7.62 19.29 L5.22 21.86 L2.14 18.78 L4.71 16.38 A8.50 8.50 0 0 1 3.75 14.06 L0.23 14.18 L0.23 9.82 L3.75 9.94 A8.50 8.50 0 0 1 4.71 7.62 L2.14 5.22 L5.22 2.14 L7.62 4.71 Z M16.09 12.00 A4.09 4.09 0 1 0 7.91 12.00 A4.09 4.09 0 1 0 16.09 12.00 Z" />
     </svg>
-    Settings
+    {t('tray.settings')}
   </button>
 
   <button
@@ -73,7 +74,7 @@
     onclick={() => void run(() => setCaptureEnabled(!captureOn))}
   >
     <span class="dot" class:on={captureOn}></span>
-    {captureOn ? 'Disable capture' : 'Enable capture'}
+    {captureOn ? t('tray.disableCapture') : t('tray.enableCapture')}
   </button>
 
   <hr />
@@ -88,7 +89,7 @@
         d="M9 4.6H6.2a1.6 1.6 0 0 0-1.6 1.6v11.6a1.6 1.6 0 0 0 1.6 1.6H9M15.4 15.6 19 12l-3.6-3.6M19 12H9.4"
       />
     </svg>
-    Quit Rebuffer
+    {t('tray.quit')}
   </button>
 </nav>
 
@@ -120,7 +121,7 @@
     color: var(--text-1);
     font-size: var(--fs-md);
     font-family: inherit;
-    text-align: left;
+    text-align: start;
     cursor: pointer;
     transition:
       background var(--dur-fast) var(--ease-out),

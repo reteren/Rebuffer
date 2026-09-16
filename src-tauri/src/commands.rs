@@ -193,6 +193,14 @@ pub fn get_settings(state: State<'_, AppState>) -> Settings {
     state.settings.get()
 }
 
+/// The BCP-47 tags of the languages Windows shows its own interface in, most
+/// preferred first. The `"system"` language setting resolves against this
+/// rather than `navigator.language`, which WebView2 always reports as `en-US`.
+#[tauri::command]
+pub fn get_system_languages() -> Vec<String> {
+    crate::settings::system_ui_languages()
+}
+
 /// Reads the live state of Windows clipboard history (Win+V) for this user.
 /// OS state, not a stored preference — see `settings::clipboard_history_enabled`.
 #[tauri::command]

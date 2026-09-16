@@ -18,20 +18,6 @@ export const THEMES = [
 ] as const
 export type Theme = (typeof THEMES)[number]
 
-export const THEME_LABELS: Record<Theme, string> = {
-  darkblue: 'Dark blue',
-  black: 'Black',
-  light: 'Light',
-  grey: 'Grey',
-  skyblue: 'Sky blue',
-  'dark-green': 'Dark green',
-  'dark-purple': 'Dark purple',
-  ember: 'Ember',
-  ocean: 'Ocean',
-  wine: 'Wine',
-  paper: 'Paper',
-}
-
 export type Kind = 'text' | 'image' | 'video' | 'file' | 'other'
 export type SubKind = 'plain' | 'rich' | 'code' | 'link' | 'color' | 'animated'
 
@@ -189,6 +175,8 @@ export interface Settings {
     theme: Theme
     showAge: boolean
     formatLabelSize: 'off' | 'small' | 'medium' | 'large'
+    /** 'system' follows Windows; otherwise a locale in src/lib/i18n/locales. */
+    language: string
     animateGifs: boolean
     reduceMotion: boolean
     accent: string

@@ -312,6 +312,7 @@ Stored as `settings.json` next to the database, hot-reloaded on change, validate
   "appearance": {
     "showAge": true,
     "formatLabelSize": "medium",  // "off" | "small" | "medium" | "large"
+    "language": "system",         // "system" follows Windows; else en|ru|de|es|pt|it|zh|ja|fr|ar
     "animateGifs": true,
     "reduceMotion": false,
     "accent": "#7aa2ff"
@@ -366,6 +367,7 @@ begin_drag(ids: Vec<i64>) -> ()
 
 // settings & lifecycle
 get_settings() -> Settings
+get_system_languages() -> Vec<String>   // OS display languages, most preferred first
 update_settings(patch: SettingsPatch) -> Settings
 relocate_store(path: String) -> ()           // emits progress events
 export_data(path: String) -> ()

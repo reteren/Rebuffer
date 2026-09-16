@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n/index.svelte'
   import type { Facet, Filter, Kind, Sort } from '../types'
 
   interface Props {
@@ -14,14 +15,16 @@
 
   let { query, sort, filter, facets, onquery, onsort, onfilter, onadd }: Props = $props()
 
-  const SORTS: Array<{ value: Sort; label: string }> = [
-    { value: 'newest', label: 'Newest' },
-    { value: 'oldest', label: 'Oldest' },
-    { value: 'nameAsc', label: 'Name A to Z' },
-    { value: 'nameDesc', label: 'Name Z to A' },
-    { value: 'sizeAsc', label: 'Size, small first' },
-    { value: 'sizeDesc', label: 'Size, large first' },
-  ]
+  // $derived so the labels follow the language; see EmptyState for why a plain
+  // const freezes whatever was current when the component was created.
+  const SORTS: Array<{ value: Sort; label: string }> = $derived([
+    { value: 'newest', label: t('toolbar.sortNewest') },
+    { value: 'oldest', label: t('toolbar.sortOldest') },
+    { value: 'nameAsc', label: t('toolbar.sortNameAsc') },
+    { value: 'nameDesc', label: t('toolbar.sortNameDesc') },
+    { value: 'sizeAsc', label: t('toolbar.sortSizeAsc') },
+    { value: 'sizeDesc', label: t('toolbar.sortSizeDesc') },
+  ])
 
   const filterValue = $derived.by(() => {
     if (filter.ext) return `e:${filter.ext}`
@@ -57,7 +60,7 @@
     <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
       <path d="M6 1v10M1 6h10" />
     </svg>
-    <span>Add</span>
+    <span>{t('toolbar.add')}</span>
   </button>
 
   <label class="search">
@@ -67,7 +70,7 @@
     </svg>
     <input
       type="text"
-      placeholder="Search clipboard"
+      placeholder={t('toolbar.search')}
       spellcheck="false"
       autocomplete="off"
       value={query}
@@ -78,7 +81,7 @@
   <label class="select">
     <select
       value={sort}
-      aria-label="Sort"
+      aria-label={t('toolbar.sort')}
       onchange={(e) => onsort?.((e.currentTarget as HTMLSelectElement).value as Sort)}
     >
       {#each SORTS as s (s.value)}
@@ -88,18 +91,18 @@
   </label>
 
   <label class="select">
-    <select value={filterValue} aria-label="Filter" onchange={onFilterChange}>
-      <optgroup label="Type">
-        <option value="all">All</option>
-        <option value="k:image">Images</option>
-        <option value="k:text">Text</option>
-        <option value="k:link">Links</option>
-        <option value="k:file">Files</option>
-        <option value="k:video">Video</option>
-        <option value="k:other">Other</option>
+    <select value={filterValue} aria-label={t('toolbar.filter')} onchange={onFilterChange}>
+      <optgroup label={t('toolbar.groupType')}>
+        <option value="all">{t('toolbar.filterAll')}</option>
+        <option value="k:image">{t('toolbar.kindImages')}</option>
+        <option value="k:text">{t('toolbar.kindText')}</option>
+        <option value="k:link">{t('toolbar.kindLinks')}</option>
+        <option value="k:file">{t('toolbar.kindFiles')}</option>
+        <option value="k:video">{t('toolbar.kindVideo')}</option>
+        <option value="k:other">{t('toolbar.kindOther')}</option>
       </optgroup>
       {#if facets.length > 0}
-        <optgroup label="Extension">
+        <optgroup label={t('toolbar.groupExtension')}>
           {#each facets as f (f.ext)}
             <option value="e:{f.ext}">{f.ext} ({f.count})</option>
           {/each}

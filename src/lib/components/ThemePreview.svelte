@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { THEME_LABELS, type Theme } from '../types'
+  import { t } from '../i18n/index.svelte'
+  import { type Theme } from '../types'
 
   interface Props {
     theme: Theme
@@ -43,7 +44,7 @@
       <span class="dot"></span>
     </span>
   </span>
-  <span class="name">{THEME_LABELS[theme]}</span>
+  <span class="name">{t(`theme.${theme}`)}</span>
 </button>
 
 <style>
@@ -143,7 +144,7 @@
   }
 
   .dot {
-    margin-left: auto;
+    margin-inline-start: auto;
     width: 5px;
     height: 5px;
     border-radius: var(--r-pill);

@@ -258,6 +258,7 @@ pub fn run() {
             commands::show_in_folder,
             commands::begin_drag,
             commands::get_settings,
+            commands::get_system_languages,
             commands::update_settings,
             commands::relocate_store,
             commands::export_data,

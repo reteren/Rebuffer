@@ -105,6 +105,11 @@ pub struct AppearanceSettings {
     pub show_age: bool,
     /// `"off"` | `"small"` | `"medium"` | `"large"`.
     pub format_label_size: String,
+    /// UI language: `"system"` to follow Windows, or one of the codes in
+    /// `LANGUAGES`. Stored here rather than in its own section because it is
+    /// the same kind of setting as the theme — how the app presents itself,
+    /// not what it does.
+    pub language: String,
     pub animate_gifs: bool,
     pub reduce_motion: bool,
     pub accent: String,
@@ -198,6 +203,7 @@ impl Default for AppearanceSettings {
             theme: "darkblue".into(),
             show_age: true,
             format_label_size: "medium".into(),
+            language: "system".into(),
             animate_gifs: true,
             reduce_motion: false,
             accent: String::new(),
@@ -248,6 +254,13 @@ pub fn default_store_root() -> PathBuf {
 const SIZE_MODES: &[&str] = &["percent", "fixed"];
 const LABEL_SIZES: &[&str] = &["off", "small", "medium", "large"];
 
+/// Every language the interface is translated into, plus `"system"`, which
+/// takes the one Windows is set to and falls back to English when that is not
+/// among them. Kept in step with `src/lib/i18n/locales/`.
+const LANGUAGES: &[&str] = &[
+    "system", "en", "ru", "de", "es", "pt", "it", "zh", "ja", "fr", "ar",
+];
+
 /// `#RGB`, `#RRGGBB` or `#RRGGBBAA`.
 fn is_valid_hex(s: &str) -> bool {
     let b = s.as_bytes();
@@ -292,6 +305,9 @@ pub fn validate(s: &mut Settings) {
     }
     if !LABEL_SIZES.contains(&s.appearance.format_label_size.as_str()) {
         s.appearance.format_label_size = AppearanceSettings::default().format_label_size;
+    }
+    if !LANGUAGES.contains(&s.appearance.language.as_str()) {
+        s.appearance.language = AppearanceSettings::default().language;
     }
 }
 
@@ -778,6 +794,56 @@ pub fn rewrite_run_value(app_name: &str, silent: bool) -> AppResult<()> {
 /// NUL-terminated UTF-16, for `PCWSTR` parameters.
 fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+// ---------------------------------------------------------------------------
+// display language
+// ---------------------------------------------------------------------------
+
+/// The languages Windows is set to show its own interface in, most preferred
+/// first, as BCP-47 tags like `["ru-RU", "en-US"]`.
+///
+/// The WebView cannot answer this: `navigator.language` in WebView2 reports the
+/// language the runtime was launched with, which is `en-US` no matter what the
+/// Windows display language is. A user running Windows in Russian was getting
+/// an English UI from `"system"` because of it, so the answer comes from the OS
+/// here and is handed to the frontend.
+pub fn system_ui_languages() -> Vec<String> {
+    use windows::core::PWSTR;
+    use windows::Win32::Globalization::{GetUserPreferredUILanguages, MUI_LANGUAGE_NAME};
+
+    let mut count = 0u32;
+    let mut chars = 0u32;
+    // SAFETY: a null buffer with a zero length is the documented way to ask for
+    // the size; the API only writes the two out-params in that call.
+    let sized = unsafe {
+        GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &mut count, None, &mut chars).is_ok()
+    };
+    if !sized || chars == 0 {
+        return Vec::new();
+    }
+
+    let mut buf = vec![0u16; chars as usize];
+    // SAFETY: buf holds exactly the `chars` UTF-16 units the sizing call asked
+    // for, and `chars` is passed unchanged alongside it.
+    let filled = unsafe {
+        GetUserPreferredUILanguages(
+            MUI_LANGUAGE_NAME,
+            &mut count,
+            Some(PWSTR(buf.as_mut_ptr())),
+            &mut chars,
+        )
+        .is_ok()
+    };
+    if !filled {
+        return Vec::new();
+    }
+
+    // A double-null-terminated block of null-separated names.
+    buf.split(|c| *c == 0)
+        .filter(|part| !part.is_empty())
+        .map(String::from_utf16_lossy)
+        .collect()
 }
 
 // ---------------------------------------------------------------------------

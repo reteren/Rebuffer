@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n/index.svelte'
   let { itemCount, totalBytes }: { itemCount: number; totalBytes: number } = $props()
 
   function formatBytes(n: number): string {
@@ -20,7 +21,7 @@
 </script>
 
 <div class="status">
-  <span class="stats">{countText} items - {sizeText}</span>
+  <span class="stats">{t('status.items', { count: countText, size: sizeText })}</span>
 </div>
 
 <style>

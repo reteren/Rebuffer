@@ -1,10 +1,11 @@
 <script lang="ts">
+  import { t } from '../i18n/index.svelte'
   let { count = 24 }: { count?: number } = $props()
 
   const tiles = $derived(Array.from({ length: Math.max(0, count) }, (_, i) => i))
 </script>
 
-<div class="skeleton" role="status" aria-label="Loading">
+<div class="skeleton" role="status" aria-label={t('skeleton.loading')}>
   {#each tiles as i (i)}
     <div class="tile" style="--skel-delay:{i % 8 * 0.12}s"></div>
   {/each}

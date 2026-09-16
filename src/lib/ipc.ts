@@ -118,6 +118,13 @@ export function getSettings(): Promise<Settings> {
   return invoke<Settings>('get_settings')
 }
 
+/** The languages Windows shows its own interface in, most preferred first.
+ * `navigator.language` cannot stand in for this: WebView2 reports `en-US`
+ * whatever the Windows display language is. */
+export function getSystemLanguages(): Promise<string[]> {
+  return invoke<string[]>('get_system_languages')
+}
+
 /** Live state of Windows clipboard history (Win+V) for this user. OS state,
  * not a stored preference — it lives in HKCU, and settings.json must never
  * shadow it. */

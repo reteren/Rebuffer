@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n/index.svelte'
   import type { ItemDto, Kind } from '../types'
 
   interface Props {
@@ -92,12 +93,12 @@
 
   const ageLabel = $derived.by(() => {
     const ms = Math.max(0, Date.now() - item.createdAt)
-    if (ms < 60_000) return 'now'
+    if (ms < 60_000) return t('card.ageNow')
     const m = Math.floor(ms / 60_000)
-    if (m < 60) return `${m}m`
+    if (m < 60) return t('card.ageMinutes', { n: m })
     const h = Math.floor(m / 60)
-    if (h < 24) return `${h}h`
-    return `${Math.floor(h / 24)}d`
+    if (h < 24) return t('card.ageHours', { n: h })
+    return t('card.ageDays', { n: Math.floor(h / 24) })
   })
 
   const textFont = $derived(`${(7.5 + (zoom - 1) * 1.6).toFixed(1)}px`)
@@ -237,7 +238,9 @@
             </svg>
           {/if}
         </span>
-        <span class="fname">{item.fileNames.length > 1 ? `${item.fileNames.length} files` : fileName}</span>
+        <span class="fname">{item.fileNames.length > 1
+            ? t('card.fileCount', { n: item.fileNames.length })
+            : fileName}</span>
       </div>
     {:else}
       <div class="glyph-fallback"></div>
@@ -250,7 +253,7 @@
 
   <div class="badges">
     {#if item.pinned}
-      <span class="badge pin-b" title="Pinned">
+      <span class="badge pin-b" title={t('card.pinned')}>
         <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor">
           <path d="M12 2a6 6 0 0 0-6 6c0 4.6 6 11 6 11s6-6.4 6-11a6 6 0 0 0-6-6Z" />
           <circle cx="12" cy="8" r="2.2" fill="var(--surface-2)" />
@@ -258,13 +261,13 @@
       </span>
     {/if}
     {#if item.missing}
-      <span class="badge miss">Missing</span>
+      <span class="badge miss">{t('card.missing')}</span>
     {/if}
   </div>
 
   {#if isCurrent}
-    <span class="badge live" title="This is what the clipboard holds right now">
-      in buffer
+    <span class="badge live" title={t('card.current')}>
+      {t('card.inBuffer')}
     </span>
   {/if}
 
@@ -424,7 +427,7 @@
 
   .play svg {
     position: absolute;
-    margin-left: 1.5px;
+    margin-inline-start: 1.5px;
   }
 
   /* ---- text ----------------------------------------------------------- */
