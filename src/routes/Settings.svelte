@@ -26,6 +26,7 @@
   import { settings } from '../lib/stores/settings.svelte'
   import { t } from '../lib/i18n/index.svelte'
   import LanguagePicker from '../lib/components/LanguagePicker.svelte'
+  import NumberField from '../lib/components/NumberField.svelte'
   import ThemePreview from '../lib/components/ThemePreview.svelte'
   import { THEMES } from '../lib/types'
   import type {
@@ -232,12 +233,6 @@
         clipboardHistory = before
         error = `Could not change Windows clipboard history: ${String(err)}`
       })
-  }
-
-  function clampInt(v: string, min: number, max: number): number {
-    const n = Number(v)
-    if (!Number.isFinite(n)) return min
-    return Math.max(min, Math.min(max, Math.round(n)))
   }
 
   function fmtBytes(n: number): string {
@@ -610,13 +605,12 @@ function resetEverything(): void {
           <label class="field-label">
             {t('settings.retention')}
             <span class="row">
-              <input
-                type="number"
+              <NumberField
                 min={1}
                 max={30}
+                width="92px"
                 value={settings.current.storage.retentionDays}
-                onchange={(e) =>
-                  patch({ storage: { retentionDays: clampInt(e.currentTarget.value, 1, 30) } })}
+                onchange={(n) => patch({ storage: { retentionDays: n ?? 1 } })}
               />
               <span>{t('settings.days')}</span>
             </span>
@@ -627,13 +621,12 @@ function resetEverything(): void {
           <label class="field-label">
             {t('settings.tempFiles')}
             <span class="row">
-              <input
-                type="number"
+              <NumberField
                 min={1}
                 max={90}
+                width="92px"
                 value={settings.current.storage.tempFilesDays}
-                onchange={(e) =>
-                  patch({ storage: { tempFilesDays: clampInt(e.currentTarget.value, 1, 90) } })}
+                onchange={(n) => patch({ storage: { tempFilesDays: n ?? 1 } })}
               />
               <span>{t('settings.days')}</span>
             </span>
@@ -647,14 +640,11 @@ function resetEverything(): void {
           <label class="field-label">
             {t('settings.maxItemSize')}
             <span class="row">
-              <input
-                type="number"
+              <NumberField
                 min={1}
+                width="100px"
                 value={Math.round(settings.current.storage.maxItemBytes / MB)}
-                onchange={(e) =>
-                  patch({
-                    storage: { maxItemBytes: Math.max(1, Number(e.currentTarget.value) || 1) * MB },
-                  })}
+                onchange={(n) => patch({ storage: { maxItemBytes: Math.max(1, n ?? 1) * MB } })}
               />
               <span>{t('settings.mb')}</span>
             </span>
@@ -666,19 +656,15 @@ function resetEverything(): void {
           <label class="field-label">
             {t('settings.storeCap')}
             <span class="row">
-              <input
-                type="number"
+              <NumberField
                 min={1}
-                value={settings.current.storage.maxStoreBytes === null ? '' : Math.round(settings.current.storage.maxStoreBytes / MB)}
-                onchange={(e) =>
-                  patch({
-                    storage: {
-                      maxStoreBytes:
-                        e.currentTarget.value === ''
-                          ? null
-                          : Math.max(1, Number(e.currentTarget.value) || 1) * MB,
-                    },
-                  })}
+                width="100px"
+                allowEmpty
+                value={settings.current.storage.maxStoreBytes === null
+                  ? null
+                  : Math.round(settings.current.storage.maxStoreBytes / MB)}
+                onchange={(n) =>
+                  patch({ storage: { maxStoreBytes: n === null ? null : Math.max(1, n) * MB } })}
               />
               <span>{t('settings.storeCapUnit')}</span>
             </span>
@@ -726,12 +712,12 @@ function resetEverything(): void {
             {/each}
           </ul>
           <div class="row">
-            <input
-              type="number"
+            <NumberField
               min={0}
               max={3650}
+              width="92px"
               value={cleanDays}
-              onchange={(e) => { cleanDays = clampInt(e.currentTarget.value, 0, 3650) }}
+              onchange={(n) => { cleanDays = n ?? 0 }}
             />
             <span>{t('settings.cleanOlder')}</span>
             <button onclick={() => void runClean()}>{t('settings.cleanNow')}</button>
@@ -802,13 +788,12 @@ function resetEverything(): void {
           <div class="field">
             <label class="field-label">
               {t('settings.percentOfMonitor')}
-              <input
-                type="number"
+              <NumberField
                 min={10}
                 max={100}
+                width="92px"
                 value={settings.current.window.percentOfMonitor}
-                onchange={(e) =>
-                  patch({ window: { percentOfMonitor: clampInt(e.currentTarget.value, 10, 100) } })}
+                onchange={(n) => patch({ window: { percentOfMonitor: n ?? 10 } })}
               />
             </label>
           </div>
@@ -816,35 +801,37 @@ function resetEverything(): void {
           <div class="field">
             <span class="field-label">{t('settings.fixedWidthHeight')}</span>
             <div class="row">
-              <input
-                type="number"
+              <NumberField
                 min={320}
                 max={3840}
+                step={10}
+                width="104px"
                 value={settings.current.window.fixed.width}
-                aria-label={t('settings.fixedWidth')}
-                onchange={(e) =>
+                ariaLabel={t('settings.fixedWidth')}
+                onchange={(n) =>
                   patch({
                     window: {
                       fixed: {
-                        width: clampInt(e.currentTarget.value, 320, 3840),
+                        width: n ?? 320,
                         height: settings.current.window.fixed.height,
                       },
                     },
                   })}
               />
               <span>×</span>
-              <input
-                type="number"
+              <NumberField
                 min={320}
                 max={2160}
+                step={10}
+                width="104px"
                 value={settings.current.window.fixed.height}
-                aria-label={t('settings.fixedHeight')}
-                onchange={(e) =>
+                ariaLabel={t('settings.fixedHeight')}
+                onchange={(n) =>
                   patch({
                     window: {
                       fixed: {
                         width: settings.current.window.fixed.width,
-                        height: clampInt(e.currentTarget.value, 320, 2160),
+                        height: n ?? 320,
                       },
                     },
                   })}
@@ -870,13 +857,12 @@ function resetEverything(): void {
         <div class="field">
           <label class="field-label">
             {t('settings.gridZoom')}
-            <input
-              type="number"
+            <NumberField
               min={1}
               max={5}
+              width="80px"
               value={settings.current.window.zoomStep}
-              onchange={(e) =>
-                patch({ window: { zoomStep: clampInt(e.currentTarget.value, 1, 5) } })}
+              onchange={(n) => patch({ window: { zoomStep: n ?? 1 } })}
             />
           </label>
         </div>
@@ -1182,7 +1168,6 @@ function resetEverything(): void {
     word-break: break-all;
   }
 
-  input[type='number'],
   input[type='text'],
   select {
     background: var(--input-bg);
@@ -1195,7 +1180,6 @@ function resetEverything(): void {
     max-width: 220px;
   }
 
-  input[type='number']:focus,
   input[type='text']:focus,
   select:focus {
     border-color: var(--accent);
