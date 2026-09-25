@@ -2,7 +2,7 @@
   import { untrack } from 'svelte'
   import Card from './Card.svelte'
   import { locale, t } from '../i18n/index.svelte'
-  import type { ItemDto } from '../types'
+  import type { ItemDto, TimeFormat } from '../types'
 
   interface Props {
     items: ItemDto[]
@@ -11,6 +11,7 @@
     selectedIds: Set<number>
     focusedId: number | null
     showAge: boolean
+    timeFormat: TimeFormat
     /// The item on the clipboard right now, marked as live in the grid.
     currentId?: number | null
     formatLabelSize: string
@@ -27,6 +28,7 @@
     selectedIds,
     focusedId,
     showAge,
+    timeFormat,
     currentId = null,
     formatLabelSize,
     animateGifs,
@@ -281,6 +283,7 @@
           focused={c.item.id === focusedId}
           zoom={z}
           showAge={showAge}
+          timeFormat={timeFormat}
           isCurrent={c.item.id === currentId}
           formatLabelSize={labelSize}
           animateGifs={animateGifs}

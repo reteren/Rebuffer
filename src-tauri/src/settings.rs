@@ -103,6 +103,11 @@ pub struct AppearanceSettings {
     /// leaving the UI unstyled.
     pub theme: String,
     pub show_age: bool,
+    /// How the age badge reads the clock: `"relative"` for the distance from
+    /// now (`14m`, `3h`), `"clock24"` for `22:54`, `"clock12"` for `10:54 PM`.
+    /// Relative stays the default because the common question about a card is
+    /// how long ago it was copied, not at what hour.
+    pub time_format: String,
     /// `"off"` | `"small"` | `"medium"` | `"large"`.
     pub format_label_size: String,
     /// UI language: `"system"` to follow Windows, or one of the codes in
@@ -202,6 +207,7 @@ impl Default for AppearanceSettings {
         AppearanceSettings {
             theme: "darkblue".into(),
             show_age: true,
+            time_format: "relative".into(),
             format_label_size: "medium".into(),
             language: "system".into(),
             animate_gifs: true,
@@ -253,6 +259,7 @@ pub fn default_store_root() -> PathBuf {
 
 const SIZE_MODES: &[&str] = &["percent", "fixed"];
 const LABEL_SIZES: &[&str] = &["off", "small", "medium", "large"];
+const TIME_FORMATS: &[&str] = &["relative", "clock24", "clock12"];
 
 /// Every language the interface is translated into, plus `"system"`, which
 /// takes the one Windows is set to and falls back to English when that is not
@@ -305,6 +312,9 @@ pub fn validate(s: &mut Settings) {
     }
     if !LABEL_SIZES.contains(&s.appearance.format_label_size.as_str()) {
         s.appearance.format_label_size = AppearanceSettings::default().format_label_size;
+    }
+    if !TIME_FORMATS.contains(&s.appearance.time_format.as_str()) {
+        s.appearance.time_format = AppearanceSettings::default().time_format;
     }
     if !LANGUAGES.contains(&s.appearance.language.as_str()) {
         s.appearance.language = AppearanceSettings::default().language;
@@ -376,6 +386,12 @@ fn sanitize_json(v: &mut Value) {
             "formatLabelSize",
             LABEL_SIZES,
             &AppearanceSettings::default().format_label_size,
+        );
+        require_one_of(
+            o,
+            "timeFormat",
+            TIME_FORMATS,
+            &AppearanceSettings::default().time_format,
         );
         require_bool(o, "animateGifs");
         require_bool(o, "reduceMotion");
@@ -1136,6 +1152,18 @@ mod tests {
         assert_eq!(as_settings(v).window.size_mode, "percent");
         let v = sanitized(json!({ "appearance": { "formatLabelSize": "huge" } }));
         assert_eq!(as_settings(v).appearance.format_label_size, "medium");
+        let v = sanitized(json!({ "appearance": { "timeFormat": "sundial" } }));
+        assert_eq!(as_settings(v).appearance.time_format, "relative");
+    }
+
+    /// A settings file written before the setting existed must read as the
+    /// old behaviour, not as an empty string the UI would not recognise.
+    #[test]
+    fn missing_time_format_defaults_to_relative() {
+        let v = sanitized(json!({ "appearance": { "showAge": true } }));
+        assert_eq!(as_settings(v).appearance.time_format, "relative");
+        let v = sanitized(json!({ "appearance": { "timeFormat": "clock12" } }));
+        assert_eq!(as_settings(v).appearance.time_format, "clock12");
     }
 
     #[test]

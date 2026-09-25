@@ -70,6 +70,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   appearance: {
     showAge: true,
+    timeFormat: 'relative',
     formatLabelSize: 'medium',
     language: 'system',
     animateGifs: true,

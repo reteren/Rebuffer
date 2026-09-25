@@ -18,6 +18,11 @@ export const THEMES = [
 ] as const
 export type Theme = (typeof THEMES)[number]
 
+/// How a card states when it was copied. `relative` is the default and the
+/// only one that needs no clock convention: `14m`, `3h`, `2d`.
+export const TIME_FORMATS = ['relative', 'clock24', 'clock12'] as const
+export type TimeFormat = (typeof TIME_FORMATS)[number]
+
 export type Kind = 'text' | 'image' | 'video' | 'file' | 'other'
 export type SubKind = 'plain' | 'rich' | 'code' | 'link' | 'color' | 'animated'
 
@@ -174,6 +179,9 @@ export interface Settings {
   appearance: {
     theme: Theme
     showAge: boolean
+    /// What the age badge shows: the distance from now, or the wall clock the
+    /// item was copied at, in 24- or 12-hour form.
+    timeFormat: TimeFormat
     formatLabelSize: 'off' | 'small' | 'medium' | 'large'
     /** 'system' follows Windows; otherwise a locale in src/lib/i18n/locales. */
     language: string

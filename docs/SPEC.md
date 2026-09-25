@@ -213,7 +213,7 @@ Default tile size targets **20 columns × 7 visible rows** at 2560×1440 in a wi
 ### 6.3 Cards
 
 Each card carries:
-- **Top-left:** relative age — `14m`, `3h`, `2d`. Toggleable, `settings.showAge`
+- **Top-left:** the time badge — `14m`, `3h`, `2d`. Toggleable, `settings.showAge`; `settings.timeFormat` switches it to the wall clock (`22:54` or `10:54 PM`) — the time only, since the group heading above already carries the date
 - **Bottom-left:** format label in large type — `PNG`, `TXT`, `MP4`. Size configurable (`settings.formatLabelSize`: off / small / medium / large)
 - **Center:** the preview
 
@@ -311,6 +311,7 @@ Stored as `settings.json` next to the database, hot-reloaded on change, validate
   },
   "appearance": {
     "showAge": true,
+    "timeFormat": "relative",     // "relative" | "clock24" | "clock12"
     "formatLabelSize": "medium",  // "off" | "small" | "medium" | "large"
     "language": "system",         // "system" follows Windows; else en|ru|de|es|pt|it|zh|ja|fr|ar
     "animateGifs": true,

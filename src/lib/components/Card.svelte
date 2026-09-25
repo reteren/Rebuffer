@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { t } from '../i18n/index.svelte'
-  import type { ItemDto, Kind } from '../types'
+  import { locale, t } from '../i18n/index.svelte'
+  import type { ItemDto, Kind, TimeFormat } from '../types'
 
   interface Props {
     item: ItemDto
@@ -8,6 +8,7 @@
     focused: boolean
     zoom: number
     showAge: boolean
+    timeFormat: TimeFormat
     formatLabelSize: 'off' | 'small' | 'medium' | 'large'
     /// This item is what the clipboard holds right now.
     isCurrent?: boolean
@@ -21,7 +22,7 @@
     ontoggle?: (item: ItemDto, mode: 'single' | 'ctrl' | 'shift') => void
   }
 
-  let { item, selected, focused, zoom, showAge, formatLabelSize, animateGifs, isCurrent = false, style, onactivate, oncontextmenu, ontoggle }: Props =
+  let { item, selected, focused, zoom, showAge, timeFormat, formatLabelSize, animateGifs, isCurrent = false, style, onactivate, oncontextmenu, ontoggle }: Props =
     $props()
 
   // Two-level fallback, so a broken source never shows a broken-image glyph:
@@ -92,6 +93,7 @@
   })
 
   const ageLabel = $derived.by(() => {
+    if (timeFormat === 'clock24' || timeFormat === 'clock12') return clockLabel(item.createdAt)
     const ms = Math.max(0, Date.now() - item.createdAt)
     if (ms < 60_000) return t('card.ageNow')
     const m = Math.floor(ms / 60_000)
@@ -100,6 +102,20 @@
     if (h < 24) return t('card.ageHours', { n: h })
     return t('card.ageDays', { n: Math.floor(h / 24) })
   })
+
+  /// The wall clock the item was copied at, for the two clock formats.
+  ///
+  /// The time and nothing else, whatever the item's age: the grid heads every
+  /// group with its date, so a date on the card too would repeat what is
+  /// already a row above it. Formatted by the interface language, which is why
+  /// a Japanese UI says 午後10:54 rather than an English-looking PM.
+  function clockLabel(ts: number): string {
+    const opts: Intl.DateTimeFormatOptions =
+      timeFormat === 'clock12'
+        ? { hour: 'numeric', minute: '2-digit', hour12: true }
+        : { hour: '2-digit', minute: '2-digit', hour12: false }
+    return new Intl.DateTimeFormat(locale(), opts).format(new Date(ts))
+  }
 
   const textFont = $derived(`${(7.5 + (zoom - 1) * 1.6).toFixed(1)}px`)
   const labelFont = $derived(

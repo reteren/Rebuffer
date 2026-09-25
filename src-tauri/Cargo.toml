@@ -1,6 +1,6 @@
 [package]
 name = "rebuffer"
-version = "1.1.8"
+version = "1.1.10"
 description = "Persistent clipboard history for Windows"
 authors = ["reteren"]
 edition = "2021"

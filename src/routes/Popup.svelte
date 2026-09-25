@@ -649,6 +649,7 @@
         selectedIds={selection.ids}
         focusedId={selection.focusedId}
         showAge={settings.current.appearance.showAge}
+        timeFormat={settings.current.appearance.timeFormat}
         formatLabelSize={settings.current.appearance.formatLabelSize}
         animateGifs={settings.current.appearance.animateGifs}
         currentId={currentClipboardId}

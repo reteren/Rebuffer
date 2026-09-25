@@ -28,7 +28,7 @@
   import LanguagePicker from '../lib/components/LanguagePicker.svelte'
   import NumberField from '../lib/components/NumberField.svelte'
   import ThemePreview from '../lib/components/ThemePreview.svelte'
-  import { THEMES } from '../lib/types'
+  import { THEMES, type TimeFormat } from '../lib/types'
   import type {
     CleanupResult,
     ImportMode,
@@ -875,6 +875,26 @@ function resetEverything(): void {
           />
           <span>{t('settings.showAge')}</span>
         </label>
+
+        <!-- Only while the badge is on: a format for something the cards are
+             not showing is a control with nothing to change. -->
+        {#if settings.current.appearance.showAge}
+          <div class="field">
+            <label class="field-label">
+              {t('settings.timeFormat')}
+              <select
+                value={settings.current.appearance.timeFormat}
+                onchange={(e) =>
+                  patch({ appearance: { timeFormat: e.currentTarget.value as TimeFormat } })}
+              >
+                <option value="relative">{t('settings.timeFormatRelative')}</option>
+                <option value="clock24">{t('settings.timeFormatClock24')}</option>
+                <option value="clock12">{t('settings.timeFormatClock12')}</option>
+              </select>
+            </label>
+            <p class="hint">{t('settings.timeFormatHint')}</p>
+          </div>
+        {/if}
 
         <div class="field">
           <label class="field-label">
