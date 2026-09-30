@@ -23,7 +23,6 @@ sizes, and clear the buffer manually. You also get 11 themes, data export, and
 a privacy tab to block specific applications, preventing passwords and
 sensitive data from being accidentally copied.
 
-![The popup grid showing text, code, link, colour, image and file cards](docs/img/popup.png)
 
 ---
 
