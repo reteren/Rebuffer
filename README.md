@@ -4,6 +4,9 @@
 
 <h1 align="center">Rebuffer</h1>
 
+
+<img width="1182" height="912" alt="ddddddd1 (1)" src="https://github.com/user-attachments/assets/729f5146-ccbe-4ee2-9577-c0a63714acaf" />
+
 A convenient utility that saves everything you copy: from links to GIFs and
 videos. History is stored for 30 days by default, but this limit can be easily
 increased in the settings.
