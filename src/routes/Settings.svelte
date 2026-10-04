@@ -92,6 +92,11 @@
   let error = $state<string | null>(null)
   let cleanup = $state<CleanupResult | null>(null)
   let cleanDays = $state(30)
+
+  /// Day counts are uncapped on purpose — how long to keep a history is the
+  /// owner's call, not ours. The one ceiling left is the field's own type:
+  /// `u32` on the Rust side, and a larger number would fail to deserialize.
+  const MAX_DAYS = 4_294_967_295
   let recording = $state(false)
   let hotkeyError = $state<string | null>(null)
   let hotkeyWarning = $state<string | null>(null)
@@ -607,8 +612,8 @@ function resetEverything(): void {
             <span class="row">
               <NumberField
                 min={1}
-                max={30}
-                width="92px"
+                max={MAX_DAYS}
+                width="112px"
                 value={settings.current.storage.retentionDays}
                 onchange={(n) => patch({ storage: { retentionDays: n ?? 1 } })}
               />
@@ -623,8 +628,8 @@ function resetEverything(): void {
             <span class="row">
               <NumberField
                 min={1}
-                max={90}
-                width="92px"
+                max={MAX_DAYS}
+                width="112px"
                 value={settings.current.storage.tempFilesDays}
                 onchange={(n) => patch({ storage: { tempFilesDays: n ?? 1 } })}
               />
@@ -714,8 +719,8 @@ function resetEverything(): void {
           <div class="row">
             <NumberField
               min={0}
-              max={3650}
-              width="92px"
+              max={MAX_DAYS}
+              width="112px"
               value={cleanDays}
               onchange={(n) => { cleanDays = n ?? 0 }}
             />

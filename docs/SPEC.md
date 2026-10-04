@@ -122,7 +122,7 @@ See `schema.sql`. Summary:
 
 Two independent janitor rules, both skipping pinned items and manual shelf items:
 
-1. **Age** — delete where `created_at < now - settings.retentionDays` (1–30, default 30). Runs on startup and hourly.
+1. **Age** — delete where `created_at < now - settings.retentionDays` (any whole number of days from 1 up, default 30). Runs on startup and hourly.
 2. **Size cap** — if `settings.maxStoreBytes` is set and total blob size exceeds it, delete oldest-first until under 90% of the cap. Fires a Windows toast: *"Clipboard store full — removed 47 old items to free 1.2 GB."* Also warns once at 90% before deleting anything.
 
 Deletion is: remove row → decrement blob refcount → delete blob if refcount hits zero. Refcount is derived (`SELECT COUNT(*) FROM items WHERE hash = ?`), not stored.
@@ -289,8 +289,8 @@ Stored as `settings.json` next to the database, hot-reloaded on change, validate
   "hotkey": { "binding": "Alt+V", "aggressiveMode": false },
   "storage": {
     "path": "%APPDATA%\\Rebuffer",
-    "retentionDays": 30,          // 1–30
-    "tempFilesDays": 7,           // 1–90; how long a file extracted from an item is kept
+    "retentionDays": 30,          // 1 or more, no ceiling but the u32 the field is stored in
+    "tempFilesDays": 7,           // same range; how long a file extracted from an item is kept
     "maxItemBytes": 268435456,    // 256 MB
     "maxStoreBytes": null,        // null = unlimited; warns at 90%, prunes at 100%
     "notifyWhenFull": true

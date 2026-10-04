@@ -301,7 +301,9 @@ static LAST_SWEEP_MS: AtomicU64 = AtomicU64::new(0);
 const SWEEP_EVERY: Duration = Duration::from_secs(60 * 60);
 
 pub fn set_temp_files_days(days: u32) {
-    TEMP_FILES_DAYS.store(days.clamp(1, 90), Ordering::SeqCst);
+    // A floor and nothing else: settings validation stopped capping this, and
+    // a second, lower ceiling here would silently ignore what the user set.
+    TEMP_FILES_DAYS.store(days.max(1), Ordering::SeqCst);
 }
 
 /// Deletes extracted files older than the configured age.

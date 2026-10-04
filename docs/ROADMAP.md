@@ -113,7 +113,7 @@ This is where it starts looking like your reference image.
 - [x] Hotkey capture field rejecting reserved combinations
 - [x] Aggressive `Win+V` mode behind a warning, with the low-level hook
 - [ ] Optional helper to disable Windows' built-in clipboard history — *not built*
-- [x] Retention janitor (1–30 days), hourly plus on startup
+- [x] Retention janitor (any number of days from 1 up, 30 by default), hourly plus on startup
 - [x] Storage cap with 90% warning toast and oldest-first pruning
 - [x] Storage usage meter split by type, with "Clean now"
 - [x] Store relocation with progress, verification, and rollback

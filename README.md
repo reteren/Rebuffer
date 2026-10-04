@@ -90,7 +90,7 @@ See [`docs/INSTALLER.md`](docs/INSTALLER.md).
 - Right-click menu: Open, Open with, Save as, Show in folder, Rename, Pin, Delete
 
 **Manage**
-- Auto-clean after 1–30 days (configurable)
+- Auto-clean after any number of days you set — 30 by default, and nothing stops you from keeping years
 - Optional storage cap: when the store exceeds your limit, the oldest unpinned items are removed and you get a notification
 - Tray icon with two entries: Settings, and Enable/Disable (left-click opens the popup)
 - Silent autostart with Windows

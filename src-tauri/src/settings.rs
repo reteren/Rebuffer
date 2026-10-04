@@ -44,9 +44,11 @@ pub struct HotkeySettings {
 pub struct StorageSettings {
     /// Absolute path; empty means "the default under %APPDATA%".
     pub path: String,
-    /// 1..=30.
+    /// How long a captured item is kept, in days. At least 1, with no upper
+    /// bound but the type's own: the owner's machine, the owner's call.
     pub retention_days: u32,
-    /// How long a file extracted from an item is kept, in days, 1..=90.
+    /// How long a file extracted from an item is kept, in days. At least 1,
+    /// and likewise uncapped.
     ///
     /// An item that exists only as clipboard bytes — a screenshot, most of the
     /// time — has no file anywhere until the user asks to open it, reveal it or
@@ -294,8 +296,11 @@ const THEMES: [&str; 11] = [
 
 /// (`sanitize_json`); this catches anything the type system let through.
 pub fn validate(s: &mut Settings) {
-    s.storage.retention_days = s.storage.retention_days.clamp(1, 30);
-    s.storage.temp_files_days = s.storage.temp_files_days.clamp(1, 90);
+    // Only a floor. Zero days would mean deleting a capture the moment it
+    // lands, and there is no ceiling worth defending: a history kept for ten
+    // years costs the person who asked for it their own disk.
+    s.storage.retention_days = s.storage.retention_days.max(1);
+    s.storage.temp_files_days = s.storage.temp_files_days.max(1);
     s.window.zoom_step = s.window.zoom_step.clamp(1, 5);
     s.window.percent_of_monitor = s.window.percent_of_monitor.clamp(10, 100);
     // Empty means "follow the theme's accent", which is the default; only a
@@ -344,7 +349,11 @@ fn sanitize_json(v: &mut Value) {
 
     sanitize_section(root, "storage", |o| {
         require_string(o, "path");
-        clamp_number(o, "retentionDays", 1.0, 30.0);
+        // The ceiling here is the field's own type, not a policy: a number
+        // past u32 in a hand-edited file would fail the deserialization and
+        // cost the user every other setting in it.
+        clamp_number(o, "retentionDays", 1.0, f64::from(u32::MAX));
+        clamp_number(o, "tempFilesDays", 1.0, f64::from(u32::MAX));
         require_number(o, "maxItemBytes");
         require_number_or_null(o, "maxStoreBytes");
         require_bool(o, "notifyWhenFull");
@@ -1021,21 +1030,30 @@ mod tests {
         s
     }
 
+    /// Both day counts have a floor and no ceiling: the old 30- and 90-day
+    /// caps are gone, and a value that would not fit the field's type is the
+    /// only thing still pulled back.
     #[test]
-    fn clamps_retention_days() {
-        let v = sanitized(json!({ "storage": { "retentionDays": 45 } }));
-        let s = as_settings(v);
-        assert_eq!(s.storage.retention_days, 30);
+    fn day_counts_keep_only_their_floor() {
+        let v = sanitized(json!({ "storage": { "retentionDays": 3650 } }));
+        assert_eq!(as_settings(v).storage.retention_days, 3650);
         let v = sanitized(json!({ "storage": { "retentionDays": 0 } }));
         assert_eq!(as_settings(v).storage.retention_days, 1);
-    }
 
-    #[test]
-    fn clamps_temp_files_days() {
         let v = sanitized(json!({ "storage": { "tempFilesDays": 400 } }));
-        assert_eq!(as_settings(v).storage.temp_files_days, 90);
+        assert_eq!(as_settings(v).storage.temp_files_days, 400);
         let v = sanitized(json!({ "storage": { "tempFilesDays": 0 } }));
         assert_eq!(as_settings(v).storage.temp_files_days, 1);
+    }
+
+    /// A number too large for `u32` must come back as the largest one that
+    /// fits, not take the whole settings file down with a failed parse.
+    #[test]
+    fn oversized_day_counts_land_on_the_type_limit() {
+        let v = sanitized(json!({ "storage": { "retentionDays": 9_999_999_999_u64 } }));
+        assert_eq!(as_settings(v).storage.retention_days, u32::MAX);
+        let v = sanitized(json!({ "storage": { "tempFilesDays": 9_999_999_999_u64 } }));
+        assert_eq!(as_settings(v).storage.temp_files_days, u32::MAX);
     }
 
     #[test]
@@ -1131,7 +1149,8 @@ mod tests {
         let s = as_settings(v);
         assert_eq!(s.hotkey.binding, "Alt+V");
         assert!(!s.hotkey.aggressive_mode);
-        assert_eq!(s.storage.retention_days, 30);
+        // 99 days is simply a setting now, not something to pull back to 30.
+        assert_eq!(s.storage.retention_days, 99);
         assert!(s.storage.path.is_empty());
         assert_eq!(s.storage.max_store_bytes, None);
         assert!(s.behavior.launch_on_startup);
