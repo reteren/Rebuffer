@@ -17,6 +17,7 @@ pub mod hotkey;
 pub mod logging;
 pub mod model;
 pub mod paste;
+pub mod placement;
 pub mod preview;
 pub mod settings;
 pub mod shell;
