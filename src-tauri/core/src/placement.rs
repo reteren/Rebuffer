@@ -27,10 +27,11 @@ use crate::settings::WindowSettings;
 /// window's top edge up and leaves the grid exactly the size it was.
 pub const DRAG_BAR_HEIGHT: u32 = 28;
 
-/// Sizes the popup per `settings.window` and CENTERS it on the cursor, clamped
-/// so the whole window fits inside the work area of the monitor under the
-/// cursor. Never lands above the work area's left/top edges.
-pub fn place_popup(hwnd: HWND, ws: &WindowSettings) -> AppResult<()> {
+/// Where the popup goes and how big it is, in physical pixels: sized per
+/// `settings.window` and CENTERED on the cursor, clamped so the whole window
+/// fits inside the work area of the monitor under the cursor. Never lands
+/// above the work area's left/top edges. Returns `(x, y, width, height)`.
+pub fn popup_rect(ws: &WindowSettings) -> AppResult<(i32, i32, u32, u32)> {
     let pt = cursor_point()?;
     // FFI: MonitorFromPoint never fails and returns a valid HMONITOR.
     let monitor = unsafe { MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST) };
@@ -54,23 +55,14 @@ pub fn place_popup(hwnd: HWND, ws: &WindowSettings) -> AppResult<()> {
         h as i32,
         &work,
     );
+    Ok((x, y, w, h))
+}
 
-    // SetWindowPos with physical pixels; SWP_NOACTIVATE so focus management
-    // stays in `show_popup`.
-    // FFI: hwnd/x/y/w/h are all derived from live Win32 state in this call.
-    unsafe {
-        SetWindowPos(
-            hwnd,
-            None,
-            x,
-            y,
-            w as i32,
-            h as i32,
-            SWP_NOZORDER | SWP_NOACTIVATE,
-        )
-        .map_err(|e| AppError::Win(format!("SetWindowPos: {e}")))?;
-    }
-    Ok(())
+/// Applies `popup_rect` to `hwnd`. SWP_NOACTIVATE, so focus management stays
+/// with the caller.
+pub fn place_popup(hwnd: HWND, ws: &WindowSettings) -> AppResult<()> {
+    let (x, y, w, h) = popup_rect(ws)?;
+    set_rect(hwnd, x, y, w, h)
 }
 
 /// Moves and sizes `hwnd` to a rect in physical pixels, without activating it.

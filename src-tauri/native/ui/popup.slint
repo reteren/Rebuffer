@@ -1,0 +1,134 @@
+// The Alt+V popup. Phase 2 of the native front end: the window, its data and
+// its behaviour are real; the look is a placeholder until phase 3 brings the
+// themes, tabs, zoom and the rest of the WebView popup across.
+
+import { LineEdit, ListView } from "std-widgets.slint";
+
+export struct CardData {
+    id: int,
+    label: string,
+    image: image,
+    has-image: bool,
+    kind: string,
+    pinned: bool,
+    current: bool,
+}
+
+export struct RowData {
+    cards: [CardData],
+}
+
+export global Metrics {
+    out property <length> card-width: 176px;
+    out property <length> card-height: 150px;
+    out property <length> gap: 8px;
+}
+
+component Card inherits Rectangle {
+    in property <CardData> data;
+    callback activate(int);
+
+    width: Metrics.card-width;
+    height: Metrics.card-height;
+    border-radius: 8px;
+    background: touch.has-hover ? #252a3a : #1e2230;
+    border-width: data.current ? 2px : 1px;
+    border-color: data.current ? #5b8cff : #2c3244;
+    clip: true;
+
+    if data.has-image: Image {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height - 22px;
+        source: data.image;
+        image-fit: cover;
+    }
+    if !data.has-image: Text {
+        x: 10px;
+        y: 8px;
+        width: parent.width - 20px;
+        height: parent.height - 36px;
+        text: data.label;
+        color: #dfe3ee;
+        font-size: 12px;
+        wrap: word-wrap;
+        overflow: elide;
+    }
+    Text {
+        x: 10px;
+        y: parent.height - 20px;
+        text: data.pinned ? "★ " + data.kind : data.kind;
+        color: #7d869c;
+        font-size: 10px;
+    }
+
+    touch := TouchArea {
+        clicked => {
+            root.activate(root.data.id);
+        }
+    }
+}
+
+export component PopupWindow inherits Window {
+    title: "Rebuffer";
+    no-frame: true;
+    always-on-top: true;
+    background: #12141a;
+    preferred-width: 780px;
+    preferred-height: 620px;
+
+    in property <[RowData]> rows;
+    in property <string> status;
+
+    callback search(string);
+    callback activate(int);
+    callback dismiss();
+
+    public function focus-search() {
+        search.focus();
+        search.select-all();
+    }
+
+    FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                root.dismiss();
+                return accept;
+            }
+            reject
+        }
+
+        VerticalLayout {
+            padding: 10px;
+            spacing: 8px;
+
+            search := LineEdit {
+                placeholder-text: "Search";
+                edited(text) => {
+                    root.search(text);
+                }
+            }
+
+            ListView {
+                for row in root.rows: HorizontalLayout {
+                    spacing: Metrics.gap;
+                    padding-bottom: Metrics.gap;
+                    alignment: start;
+                    for card in row.cards: Card {
+                        data: card;
+                        activate(id) => {
+                            root.activate(id);
+                        }
+                    }
+                }
+            }
+
+            Text {
+                text: root.status;
+                color: #7d869c;
+                font-size: 11px;
+            }
+        }
+    }
+}

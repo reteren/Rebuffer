@@ -104,6 +104,27 @@ pub struct ItemDto {
     pub file_names: Vec<String>,
 }
 
+impl ItemDto {
+    /// The thumbnail as a file, for a front end that reads the disk itself
+    /// rather than through the WebView's asset protocol.
+    pub fn thumb_file(&self) -> Option<std::path::PathBuf> {
+        self.thumb_url.as_deref().and_then(asset_url_to_path)
+    }
+
+    /// The animated original as a file; see `animated_url`.
+    pub fn animated_file(&self) -> Option<std::path::PathBuf> {
+        self.animated_url.as_deref().and_then(asset_url_to_path)
+    }
+}
+
+/// Inverts the `http://asset.localhost/<percent-encoded path>` URLs the store
+/// hands the WebView.
+pub fn asset_url_to_path(url: &str) -> Option<std::path::PathBuf> {
+    let encoded = url.strip_prefix("http://asset.localhost/")?;
+    let decoded = urlencoding::decode(encoded).ok()?;
+    Some(std::path::PathBuf::from(decoded.into_owned()))
+}
+
 /// Which tab / dropdown the grid is currently showing.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

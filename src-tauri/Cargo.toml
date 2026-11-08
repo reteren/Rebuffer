@@ -10,8 +10,8 @@ rust-version = "1.82"
 # The core builds and tests without Tauri; the native front end will join it
 # here. `default-members` keeps plain `cargo test` / `cargo clippy` covering
 # both, as they did when this was one crate.
-members = ["core"]
-default-members = [".", "core"]
+members = ["core", "native"]
+default-members = [".", "core", "native"]
 
 [lib]
 name = "rebuffer_lib"

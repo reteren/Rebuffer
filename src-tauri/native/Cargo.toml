@@ -1,0 +1,38 @@
+[package]
+name = "rebuffer-native"
+version = "0.1.0"
+description = "Rebuffer's native front end: Slint on top of rebuffer-core, no WebView"
+authors = ["reteren"]
+edition = "2021"
+publish = false
+
+# The version above is the crate's own; the shipping version still lives in
+# package.json, tauri.conf.json and ../Cargo.toml until this front end ships.
+
+[[bin]]
+name = "rebuffer-native"
+path = "src/main.rs"
+
+[dependencies]
+rebuffer-core = { path = "../core" }
+# Slint under its Royalty-free license, which asks the app to say it uses
+# Slint (AboutSlint in the About panel). Software renderer only: it idled at
+# 12.6 MB in the phase-1 spike where femtovg cost ~70 MB of GL driver memory.
+slint = { version = "1.18.1", default-features = false, features = [
+    "std",
+    "compat-1-2",
+    "backend-winit",
+    "renderer-software",
+    "accessibility",
+    "unstable-winit-030",
+    "raw-window-handle-06",
+] }
+tray-icon = "0.26.1"
+raw-window-handle = "0.6"
+image = { version = "0.25.6", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+serde_json = "1.0.151"
+tracing = "0.1.44"
+windows = { version = "0.61.3", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_System_Diagnostics_ToolHelp", "Win32_UI_WindowsAndMessaging", "Win32_System_LibraryLoader"] }
+
+[build-dependencies]
+slint-build = "1.18.1"
