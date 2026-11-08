@@ -15,6 +15,7 @@ struct Tray {
     normal: Icon,
     muted: Icon,
     open: MenuId,
+    settings: MenuItem,
     capture: MenuItem,
     quit: MenuId,
     core: Rc<Core>,
@@ -67,11 +68,18 @@ pub fn install(core: Rc<Core>) -> Result<TrayGuard, String> {
     let enabled = core.clipboard.is_enabled();
 
     let open = MenuItem::new("Open Rebuffer", true, None);
+    let settings = MenuItem::new(crate::i18n::tr("tray.settings"), true, None);
     let capture = MenuItem::new(capture_label(enabled), true, None);
     let quit = MenuItem::new("Quit", true, None);
     let menu = Menu::new();
-    menu.append_items(&[&open, &capture, &PredefinedMenuItem::separator(), &quit])
-        .map_err(|e| e.to_string())?;
+    menu.append_items(&[
+        &open,
+        &settings,
+        &capture,
+        &PredefinedMenuItem::separator(),
+        &quit,
+    ])
+    .map_err(|e| e.to_string())?;
 
     let icon = TrayIconBuilder::new()
         .with_tooltip("Rebuffer")
@@ -106,6 +114,7 @@ pub fn install(core: Rc<Core>) -> Result<TrayGuard, String> {
             normal,
             muted,
             open: open.id().clone(),
+            settings,
             capture,
             quit: quit.id().clone(),
             core,
@@ -135,6 +144,8 @@ fn on_menu(id: &MenuId) {
         let Some(tray) = t.as_ref() else { return };
         if *id == tray.open {
             crate::popup::show();
+        } else if id == tray.settings.id() {
+            crate::settings::open(tray.core.clone());
         } else if id == tray.capture.id() {
             // Saved and applied by the core; the icon follows on the
             // settings-changed that comes back (see `sync`).

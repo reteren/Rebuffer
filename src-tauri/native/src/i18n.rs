@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use slint::ComponentHandle;
 
-use crate::popup::{I18n, PopupWindow};
+use crate::ui::I18n;
 
 const LOCALES: &[(&str, &str)] = &[
     ("en", include_str!("../../../src/lib/i18n/locales/en.json")),
@@ -85,11 +85,29 @@ fn resolve(setting: &str) -> &'static str {
     "en"
 }
 
-/// Switches the interface language and tells the window to re-read every
-/// string.
-pub fn apply(ui: &PopupWindow, setting: &str) {
+/// Native names, as the WebView picker shows them, in its order.
+pub const LANGUAGES: [(&str, &str); 10] = [
+    ("en", "English"),
+    ("ar", "العربية"),
+    ("zh", "中文"),
+    ("fr", "Français"),
+    ("de", "Deutsch"),
+    ("it", "Italiano"),
+    ("ja", "日本語"),
+    ("pt", "Português"),
+    ("ru", "Русский"),
+    ("es", "Español"),
+];
+
+/// Switches the interface language and tells a window to re-read every
+/// string. Each window has its own `I18n` global, so each one is applied.
+pub fn apply<C>(ui: &C, setting: &str)
+where
+    C: ComponentHandle,
+    for<'a> I18n<'a>: slint::Global<'a, C>,
+{
     let code = resolve(setting);
-    let changed = STATE.with(|s| {
+    STATE.with(|s| {
         let mut s = s.borrow_mut();
         if s.as_ref().is_some_and(|st| st.code == code) {
             return false;
@@ -102,11 +120,11 @@ pub fn apply(ui: &PopupWindow, setting: &str) {
         true
     });
     let global = ui.global::<I18n>();
-    if changed {
-        global.set_rtl(code == "ar");
-        global.set_revision(global.get_revision() + 1);
-    }
     global.on_tr(|key, _revision| tr(key.as_str()).into());
+    // Always bumped: a window built after the language was loaded still has
+    // to evaluate its strings once against it.
+    global.set_rtl(code == "ar");
+    global.set_revision(global.get_revision() + 1);
 }
 
 /// The string for `key`, English when the active locale lacks it, the key

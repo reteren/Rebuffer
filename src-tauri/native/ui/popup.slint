@@ -444,6 +444,7 @@ export component PopupWindow inherits Window {
     callback rename-commit(string);
     callback zoom-to(int);
     callback dismiss-banner();
+    callback open-settings();
     callback start-window-drag();
 
     public function focus-search() {
@@ -654,6 +655,13 @@ export component PopupWindow inherits Window {
                 font-size: 11px;
                 vertical-alignment: center;
                 horizontal-stretch: 1;
+            }
+            IconButton {
+                y: 2px;
+                text: "⚙";
+                clicked => {
+                    root.open-settings();
+                }
             }
             HorizontalLayout {
                 spacing: 4px;

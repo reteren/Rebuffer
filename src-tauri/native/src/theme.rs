@@ -7,7 +7,7 @@
 
 use slint::{Color, ComponentHandle};
 
-use crate::popup::{PopupWindow, Theme};
+use crate::ui::{Theme, ThemeSwatch};
 
 const FILES: &[(&str, &str)] = &[
     (
@@ -114,22 +114,66 @@ pub fn names() -> impl Iterator<Item = &'static str> {
     FILES.iter().map(|(n, _)| *n)
 }
 
-/// Applies `name` (falling back to darkblue for an unknown name) to the
-/// window's `Theme` global.
-pub fn apply(ui: &PopupWindow, name: &str) {
-    let css = FILES
+fn css_of(name: &str) -> &'static str {
+    FILES
         .iter()
         .find(|(n, _)| *n == name)
         .or_else(|| FILES.first())
         .map(|(_, css)| *css)
-        .unwrap_or_default();
+        .unwrap_or_default()
+}
+
+/// Applies `name` (falling back to darkblue for an unknown name) to a
+/// window's `Theme` global, then `accent` over it when the user picked one.
+/// Every window has its own instance of the global, so each one is applied.
+pub fn apply<C>(ui: &C, name: &str, accent: &str)
+where
+    C: ComponentHandle,
+    for<'a> Theme<'a>: slint::Global<'a, C>,
+{
     // Darkblue first, so a token missing from `name` keeps a sane value
     // instead of whatever the previous theme left behind.
     let base = tokens(FILES[0].1);
     let theme = ui.global::<Theme>();
-    for (token, color) in base.into_iter().chain(tokens(css)) {
+    for (token, color) in base.into_iter().chain(tokens(css_of(name))) {
         set(&theme, token, color);
     }
+    if let Some(c) = parse_color(accent.trim()) {
+        theme.set_accent(c);
+    }
+}
+
+/// The accent a theme brings, for the settings window's color row.
+pub fn accent_of(name: &str) -> Color {
+    tokens(css_of(name))
+        .into_iter()
+        .find(|(t, _)| *t == "accent")
+        .map(|(_, c)| c)
+        .unwrap_or_else(|| Color::from_rgb_u8(0x7a, 0xa2, 0xff))
+}
+
+/// A miniature of every theme for the settings window.
+pub fn swatches(label: impl Fn(&str) -> String) -> Vec<ThemeSwatch> {
+    FILES
+        .iter()
+        .map(|(name, css)| {
+            let t = tokens(css);
+            let get = |k: &str| {
+                t.iter()
+                    .find(|(n, _)| *n == k)
+                    .map(|(_, c)| *c)
+                    .unwrap_or_default()
+            };
+            ThemeSwatch {
+                name: (*name).into(),
+                label: label(name).into(),
+                bg: get("bg-0"),
+                surface: get("surface-2"),
+                accent: get("accent"),
+                text: get("text-1"),
+            }
+        })
+        .collect()
 }
 
 fn set(t: &Theme<'_>, token: &str, c: Color) {

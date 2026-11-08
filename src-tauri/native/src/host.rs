@@ -15,9 +15,17 @@ impl Host for NativeHost {
             events::ITEM_ADDED
             | events::ITEM_UPDATED
             | events::ITEMS_DELETED
-            | events::CLIPBOARD_CURRENT => crate::popup::history_changed(),
+            | events::CLIPBOARD_CURRENT => {
+                crate::popup::history_changed();
+                crate::settings::history_changed();
+            }
+            events::STORE_PROGRESS => match serde_json::from_value(payload) {
+                Ok(p) => crate::settings::store_progress(p),
+                Err(e) => tracing::warn!("store progress with an unreadable payload: {e}"),
+            },
             events::SETTINGS_CHANGED => {
                 crate::popup::settings_changed();
+                crate::settings::settings_changed();
                 crate::tray::sync();
             }
             events::STORAGE_WARNING => match serde_json::from_value(payload) {

@@ -26,7 +26,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use crate::i18n::{tr, tr_with};
 use crate::thumbs::{Picture, Thumbs};
 
-slint::include_modules!();
+pub use crate::ui::*;
 
 /// Items fetched per page, as in the Svelte store.
 const PAGE: u32 = 200;
@@ -336,6 +336,12 @@ fn wire_callbacks(ui: &PopupWindow) {
     ui.on_zoom_to(|step| {
         with(|p| p.set_zoom(step as u32));
     });
+    ui.on_open_settings(|| {
+        with(|p| {
+            p.hide(false);
+            crate::settings::open(p.core.clone());
+        });
+    });
     ui.on_dismiss_banner(|| {
         with(|p| p.ui.set_banner(SharedString::new()));
     });
@@ -428,7 +434,7 @@ pub fn show() {
 pub fn snapshot(spec: crate::Snapshot) {
     with(|p| {
         if let Some(theme) = &spec.theme {
-            crate::theme::apply(&p.ui, theme);
+            crate::theme::apply(&p.ui, theme, "");
         }
         if let Some(lang) = &spec.lang {
             crate::i18n::apply(&p.ui, lang);
@@ -630,7 +636,7 @@ impl Popup {
 
     fn apply_settings(&self) {
         let s = self.core.settings.get();
-        crate::theme::apply(&self.ui, &s.appearance.theme);
+        crate::theme::apply(&self.ui, &s.appearance.theme, &s.appearance.accent);
         crate::i18n::apply(&self.ui, &s.appearance.language);
         self.ui.set_drag_bar(s.window.drag_bar);
 
@@ -1480,7 +1486,7 @@ fn day_label(created_ms: i64) -> String {
     day.format_localized(fmt, chrono_locale()).to_string()
 }
 
-fn fmt_bytes(n: i64) -> String {
+pub(crate) fn fmt_bytes(n: i64) -> String {
     if n < 1024 {
         return format!("{n} B");
     }

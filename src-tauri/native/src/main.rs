@@ -15,9 +15,11 @@ mod host;
 mod i18n;
 mod instance;
 mod popup;
+mod settings;
 mod theme;
 mod thumbs;
 mod tray;
+mod ui;
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -32,6 +34,10 @@ pub struct Snapshot {
     pub path: std::path::PathBuf,
     pub theme: Option<String>,
     pub lang: Option<String>,
+    /// `settings` for the settings window; the popup otherwise.
+    pub window: Option<String>,
+    /// Settings section to open, 0-5.
+    pub section: i32,
 }
 
 fn snapshot_args() -> Option<Snapshot> {
@@ -46,6 +52,8 @@ fn snapshot_args() -> Option<Snapshot> {
         path: value("--snapshot")?.into(),
         theme: value("--theme"),
         lang: value("--lang"),
+        window: value("--window"),
+        section: value("--section").and_then(|s| s.parse().ok()).unwrap_or(0),
     })
 }
 
@@ -97,7 +105,11 @@ fn main() {
         return;
     }
     if let Some(snapshot) = snapshot {
-        popup::snapshot(snapshot);
+        if snapshot.window.as_deref() == Some("settings") {
+            settings::snapshot(core.clone(), snapshot);
+        } else {
+            popup::snapshot(snapshot);
+        }
         let _ = slint::run_event_loop_until_quit();
         return;
     }
