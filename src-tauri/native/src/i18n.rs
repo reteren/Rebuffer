@@ -1,0 +1,164 @@
+//! Translations, read from the same locale JSON the WebView front end uses.
+//!
+//! Lookup mirrors `src/lib/i18n/index.svelte.ts`: nested keys flattened with
+//! dots, `{name}` placeholders, English for anything a locale lacks, and
+//! `"system"` resolved against the languages Windows shows its own UI in.
+
+use std::cell::RefCell;
+use std::collections::HashMap;
+
+use slint::ComponentHandle;
+
+use crate::popup::{I18n, PopupWindow};
+
+const LOCALES: &[(&str, &str)] = &[
+    ("en", include_str!("../../../src/lib/i18n/locales/en.json")),
+    ("ru", include_str!("../../../src/lib/i18n/locales/ru.json")),
+    ("de", include_str!("../../../src/lib/i18n/locales/de.json")),
+    ("es", include_str!("../../../src/lib/i18n/locales/es.json")),
+    ("pt", include_str!("../../../src/lib/i18n/locales/pt.json")),
+    ("it", include_str!("../../../src/lib/i18n/locales/it.json")),
+    ("zh", include_str!("../../../src/lib/i18n/locales/zh.json")),
+    ("ja", include_str!("../../../src/lib/i18n/locales/ja.json")),
+    ("fr", include_str!("../../../src/lib/i18n/locales/fr.json")),
+    ("ar", include_str!("../../../src/lib/i18n/locales/ar.json")),
+];
+
+type Dict = HashMap<String, String>;
+
+struct State {
+    code: &'static str,
+    active: Dict,
+    english: Dict,
+}
+
+thread_local! {
+    static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
+}
+
+fn flatten(prefix: &str, value: &serde_json::Value, out: &mut Dict) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (k, v) in map {
+                let key = if prefix.is_empty() {
+                    k.clone()
+                } else {
+                    format!("{prefix}.{k}")
+                };
+                flatten(&key, v, out);
+            }
+        }
+        serde_json::Value::String(s) => {
+            out.insert(prefix.to_string(), s.clone());
+        }
+        _ => {}
+    }
+}
+
+fn load(code: &str) -> Dict {
+    let raw = LOCALES
+        .iter()
+        .find(|(c, _)| *c == code)
+        .map(|(_, raw)| *raw)
+        .unwrap_or(LOCALES[0].1);
+    let mut out = Dict::new();
+    match serde_json::from_str::<serde_json::Value>(raw) {
+        Ok(v) => flatten("", &v, &mut out),
+        Err(e) => tracing::error!("locale {code} is not valid JSON: {e}"),
+    }
+    out
+}
+
+/// `setting` is `appearance.language`: a code, or `"system"`.
+fn resolve(setting: &str) -> &'static str {
+    let wanted: Vec<String> = if setting == "system" {
+        rebuffer_core::settings::system_ui_languages()
+    } else {
+        vec![setting.to_string()]
+    };
+    for tag in wanted {
+        let primary = tag.split(['-', '_']).next().unwrap_or("").to_lowercase();
+        if let Some((code, _)) = LOCALES.iter().find(|(c, _)| *c == primary) {
+            return code;
+        }
+    }
+    "en"
+}
+
+/// Switches the interface language and tells the window to re-read every
+/// string.
+pub fn apply(ui: &PopupWindow, setting: &str) {
+    let code = resolve(setting);
+    let changed = STATE.with(|s| {
+        let mut s = s.borrow_mut();
+        if s.as_ref().is_some_and(|st| st.code == code) {
+            return false;
+        }
+        *s = Some(State {
+            code,
+            active: load(code),
+            english: load("en"),
+        });
+        true
+    });
+    let global = ui.global::<I18n>();
+    if changed {
+        global.set_rtl(code == "ar");
+        global.set_revision(global.get_revision() + 1);
+    }
+    global.on_tr(|key, _revision| tr(key.as_str()).into());
+}
+
+/// The string for `key`, English when the active locale lacks it, the key
+/// itself when English does too (visible, rather than silently blank).
+pub fn tr(key: &str) -> String {
+    STATE.with(|s| {
+        let s = s.borrow();
+        let Some(st) = s.as_ref() else {
+            return key.to_string();
+        };
+        st.active
+            .get(key)
+            .or_else(|| st.english.get(key))
+            .cloned()
+            .unwrap_or_else(|| key.to_string())
+    })
+}
+
+/// `tr` with `{name}` placeholders filled.
+pub fn tr_with(key: &str, args: &[(&str, &str)]) -> String {
+    let mut s = tr(key);
+    for (name, value) in args {
+        s = s.replace(&format!("{{{name}}}"), value);
+    }
+    s
+}
+
+/// The active locale code, for date formatting.
+pub fn code() -> &'static str {
+    STATE.with(|s| s.borrow().as_ref().map_or("en", |st| st.code))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_locale_parses_and_has_the_popup_keys() {
+        let en = load("en");
+        assert!(en.len() > 200);
+        for (code, _) in LOCALES {
+            let d = load(code);
+            for key in ["tabs.all", "menu.copy", "grid.today", "status.items"] {
+                assert!(d.contains_key(key), "{code} lacks {key}");
+            }
+        }
+    }
+
+    #[test]
+    fn languages_resolve_by_their_primary_subtag() {
+        assert_eq!(resolve("ru"), "ru");
+        assert_eq!(resolve("pt-BR"), "pt");
+        assert_eq!(resolve("xx"), "en");
+    }
+}

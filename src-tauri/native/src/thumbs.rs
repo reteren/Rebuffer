@@ -16,11 +16,12 @@ use std::time::{Duration, Instant};
 
 use slint::{Image, Rgba8Pixel, SharedPixelBuffer};
 
-/// Long side of a decoded picture, in physical pixels. A card is 176 logical
-/// pixels wide; this covers it up to 125 % scaling without upscaling blur.
-const DECODE_MAX: u32 = 224;
-/// Decoded stills kept in memory: a few screens' worth.
-const CACHE_CAP: usize = 200;
+/// Long side of a decoded picture, in physical pixels. The largest tile is
+/// 188x250 logical and a picture is cropped to fill it, so the short side has
+/// to cover 188 or more; 320 does at 100-125 % scaling without visible blur.
+const DECODE_MAX: u32 = 320;
+/// Decoded stills kept in memory: a few screens' worth at the largest zoom.
+const CACHE_CAP: usize = 160;
 /// How far from the row on screen a queued decode may be and still run.
 const NEAR_ROWS: usize = 8;
 

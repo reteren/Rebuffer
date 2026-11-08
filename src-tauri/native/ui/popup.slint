@@ -1,71 +1,403 @@
-// The Alt+V popup. Phase 2 of the native front end: the window, its data and
-// its behaviour are real; the look is a placeholder until phase 3 brings the
-// themes, tabs, zoom and the rest of the WebView popup across.
+// The Alt+V popup, ported from src/routes/Popup.svelte and its components
+// (Toolbar, Tabs, Grid, Card, ContextMenu, StatusBar, ZoomDial, EmptyState).
+// Behaviour lives in native/src/popup.rs; this file is layout and looks.
 
-import { LineEdit, ListView } from "std-widgets.slint";
+import { ListView } from "std-widgets.slint";
+import { Theme, I18n } from "globals.slint";
+export { Theme, I18n }
 
 export struct CardData {
     id: int,
-    label: string,
+    // image | video | text | code | link | color | file | other
+    kind: string,
+    text: string,
     image: image,
     has-image: bool,
-    kind: string,
+    // Links: monogram letter and its two gradient stops.
+    monogram: string,
+    mono-a: color,
+    mono-b: color,
+    // Colors: the swatch.
+    swatch: color,
+    format-label: string,
+    // 0..6, one of Theme.ext-1..7.
+    ext-color: int,
+    age: string,
     pinned: bool,
+    missing: bool,
     current: bool,
+    selected: bool,
+    focused: bool,
 }
 
+// A row of the grid: a day header when `header` is set, cards otherwise.
 export struct RowData {
+    header: string,
     cards: [CardData],
 }
 
-export global Metrics {
-    out property <length> card-width: 176px;
-    out property <length> card-height: 150px;
-    out property <length> gap: 8px;
+export struct TabData {
+    // Position in the tab list as Rust knows it; the displayed order is
+    // reversed for right-to-left languages.
+    index: int,
+    label: string,
+    count: string,
+    active: bool,
+}
+
+export struct MenuEntry {
+    action: string,
+    label: string,
+    danger: bool,
+    separator-before: bool,
+}
+
+export global Layout {
+    in-out property <length> tile-w: 116px;
+    in-out property <length> tile-h: 154px;
+    in-out property <length> gap: 10px;
+    in-out property <length> pad: 16px;
+    in-out property <length> header-h: 32px;
+    in-out property <length> text-size: 10.7px;
+    in-out property <length> label-size: 10px;
+    in-out property <bool> show-age: true;
+    in-out property <bool> show-label: true;
+    public pure function ext(i: int) -> color {
+        if (i == 1) {
+            return Theme.ext-2;
+        }
+        if (i == 2) {
+            return Theme.ext-3;
+        }
+        if (i == 3) {
+            return Theme.ext-4;
+        }
+        if (i == 4) {
+            return Theme.ext-5;
+        }
+        if (i == 5) {
+            return Theme.ext-6;
+        }
+        if (i == 6) {
+            return Theme.ext-7;
+        }
+        return Theme.ext-1;
+    }
+}
+
+component Badge inherits Rectangle {
+    in property <string> text;
+    in property <color> fg: Theme.text-bright;
+    in property <color> bg: Theme.scrim-2;
+    in property <length> size: 9px;
+    border-radius: 4px;
+    background: bg;
+    width: label.preferred-width + 8px;
+    height: label.preferred-height + 2px;
+    label := Text {
+        text: root.text;
+        color: root.fg;
+        font-size: root.size;
+        font-weight: 600;
+    }
 }
 
 component Card inherits Rectangle {
     in property <CardData> data;
-    callback activate(int);
+    callback clicked(int, bool, bool);
+    callback activated(int);
+    callback context(int, length, length);
+    callback drag(int);
 
-    width: Metrics.card-width;
-    height: Metrics.card-height;
-    border-radius: 8px;
-    background: touch.has-hover ? #252a3a : #1e2230;
-    border-width: data.current ? 2px : 1px;
-    border-color: data.current ? #5b8cff : #2c3244;
+    property <bool> dragging: false;
+
+    width: Layout.tile-w;
+    height: Layout.tile-h;
+    border-radius: 10px;
+    background: touch.has-hover ? Theme.surface-2 : Theme.surface-1;
+    border-width: data.current || data.focused || data.selected ? 2px : 1px;
+    border-color: data.current ? Theme.accent : (data.selected || data.focused) ? Theme.accent.with-alpha(0.7) : Theme.border-1;
     clip: true;
+    opacity: data.missing ? 0.55 : 1;
 
-    if data.has-image: Image {
+    // The preview, by kind.
+    if data.has-image && data.kind != "link": Image {
         x: 0;
         y: 0;
         width: parent.width;
-        height: parent.height - 22px;
+        height: parent.height;
         source: data.image;
         image-fit: cover;
     }
-    if !data.has-image: Text {
-        x: 10px;
-        y: 8px;
-        width: parent.width - 20px;
-        height: parent.height - 36px;
-        text: data.label;
-        color: #dfe3ee;
-        font-size: 12px;
-        wrap: word-wrap;
-        overflow: elide;
+    if data.kind == "link" && data.has-image: Rectangle {
+        Image {
+            width: parent.width;
+            height: parent.height;
+            source: data.image;
+            image-fit: cover;
+        }
+        Rectangle {
+            y: parent.height - self.height;
+            height: 34px;
+            background: @linear-gradient(0deg, Theme.scrim-1 0%, Theme.scrim-1 58%, transparent 100%);
+            Text {
+                x: 6px;
+                width: parent.width - 12px;
+                y: parent.height - self.height - 4px;
+                text: data.text;
+                color: Theme.text-bright;
+                font-size: 9px;
+                overflow: elide;
+            }
+        }
     }
-    Text {
-        x: 10px;
-        y: parent.height - 20px;
-        text: data.pinned ? "★ " + data.kind : data.kind;
-        color: #7d869c;
-        font-size: 10px;
+    if data.kind == "link" && !data.has-image: VerticalLayout {
+        alignment: center;
+        spacing: 6px;
+        padding: 8px;
+        HorizontalLayout {
+            alignment: center;
+            Rectangle {
+                width: 30px;
+                height: 30px;
+                border-radius: 8px;
+                background: @linear-gradient(135deg, data.mono-a 0%, data.mono-b 100%);
+                Text {
+                    text: data.monogram;
+                    color: Theme.text-bright;
+                    font-size: 14px;
+                    font-weight: 700;
+                }
+            }
+        }
+        if data.text != "": Text {
+            text: data.text;
+            color: Theme.text-2;
+            font-size: 9px;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+            overflow: elide;
+        }
+    }
+    if data.kind == "color": Rectangle {
+        x: 8px;
+        y: 8px;
+        width: parent.width - 16px;
+        height: parent.height - 16px;
+        border-radius: 8px;
+        background: data.swatch;
+        Rectangle {
+            width: chip.preferred-width + 10px;
+            height: chip.preferred-height + 4px;
+            border-radius: 4px;
+            background: Theme.scrim-1;
+            chip := Text {
+                text: data.text;
+                color: Theme.text-bright;
+                font-size: 9px;
+            }
+        }
+    }
+    if (data.kind == "text" || data.kind == "code") && !data.has-image: Rectangle {
+        x: 8px;
+        y: 8px;
+        width: parent.width - 16px;
+        height: parent.height - 16px;
+        border-radius: 8px;
+        background: Theme.bg-0;
+        Text {
+            x: 6px;
+            y: 6px;
+            width: parent.width - 12px;
+            height: parent.height - 12px;
+            text: data.text;
+            color: Theme.text-1;
+            font-size: Layout.text-size;
+            font-family: data.kind == "code" ? "Cascadia Mono" : "";
+            wrap: word-wrap;
+            overflow: elide;
+            horizontal-alignment: I18n.rtl ? right : left;
+        }
+    }
+    if data.kind == "file" && !data.has-image: VerticalLayout {
+        alignment: center;
+        spacing: 4px;
+        padding: 8px;
+        Text {
+            text: "🗎";
+            font-size: 30px;
+            color: Layout.ext(data.ext-color);
+            horizontal-alignment: center;
+        }
+        Text {
+            text: data.text;
+            color: Theme.text-2;
+            font-size: 9px;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+            overflow: elide;
+        }
+    }
+    if (data.kind == "video" || data.kind == "image" || data.kind == "other") && !data.has-image: Rectangle {
+        background: @linear-gradient(150deg, Theme.surface-2 0%, Theme.bg-0 100%);
+        if data.kind == "video": Rectangle {
+            width: 30px;
+            height: 30px;
+            border-radius: 15px;
+            background: Theme.scrim-1;
+            Text {
+                text: "▶";
+                color: Theme.text-bright;
+                font-size: 12px;
+            }
+        }
+    }
+
+    // Selection veil, under the badges.
+    Rectangle {
+        background: (data.selected || data.focused) ? Theme.accent.with-alpha(0.14) : touch.has-hover ? Theme.overlay-1 : transparent;
+    }
+
+    // Badges.
+    if Layout.show-age && data.age != "": Badge {
+        x: 6px;
+        y: 6px;
+        text: data.age;
+    }
+    HorizontalLayout {
+        x: parent.width - self.preferred-width - 6px;
+        y: 6px;
+        spacing: 3px;
+        if data.current: Badge {
+            text: I18n.tr("card.inBuffer", I18n.revision);
+            bg: Theme.accent;
+            fg: Theme.on-accent;
+        }
+        if data.pinned: Badge {
+            text: "★";
+        }
+        if data.missing: Badge {
+            text: I18n.tr("card.missing", I18n.revision);
+            bg: Theme.danger;
+        }
+    }
+    if Layout.show-label && data.format-label != "": Badge {
+        x: 6px;
+        y: parent.height - self.height - 6px;
+        text: data.format-label;
+        fg: Layout.ext(data.ext-color);
+        size: Layout.label-size;
     }
 
     touch := TouchArea {
+        mouse-cursor: pointer;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                root.dragging = false;
+            }
+            if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left && !root.dragging) {
+                root.clicked(root.data.id, event.modifiers.control, event.modifiers.shift);
+            }
+            if (event.kind == PointerEventKind.up && event.button == PointerEventButton.right) {
+                root.context(root.data.id, self.absolute-position.x + self.mouse-x, self.absolute-position.y + self.mouse-y);
+            }
+        }
+        double-clicked => {
+            root.activated(root.data.id);
+        }
+        moved => {
+            if (self.pressed && !root.dragging && (abs(self.mouse-x - self.pressed-x) > 6px || abs(self.mouse-y - self.pressed-y) > 6px)) {
+                root.dragging = true;
+                root.drag(root.data.id);
+            }
+        }
+    }
+}
+
+component Chip inherits Rectangle {
+    in property <string> text;
+    in property <string> count;
+    in property <bool> active;
+    callback clicked;
+    height: 26px;
+    width: row.preferred-width + 20px;
+    border-radius: 13px;
+    background: active ? Theme.accent : t.has-hover ? Theme.surface-4 : Theme.surface-2;
+    row := HorizontalLayout {
+        alignment: center;
+        spacing: 5px;
+        Text {
+            text: root.text;
+            color: root.active ? Theme.on-accent : Theme.text-1;
+            font-size: 11px;
+            vertical-alignment: center;
+        }
+        if root.count != "": Text {
+            text: root.count;
+            color: root.active ? Theme.on-accent.with-alpha(0.7) : Theme.text-3;
+            font-size: 10px;
+            vertical-alignment: center;
+        }
+    }
+    t := TouchArea {
+        mouse-cursor: pointer;
         clicked => {
-            root.activate(root.data.id);
+            root.clicked();
+        }
+    }
+}
+
+component IconButton inherits Rectangle {
+    in property <string> text;
+    callback clicked;
+    height: 30px;
+    width: max(30px, label.preferred-width + 18px);
+    border-radius: 8px;
+    background: t.pressed ? Theme.surface-4 : t.has-hover ? Theme.surface-3 : Theme.surface-2;
+    border-width: 1px;
+    border-color: Theme.border-1;
+    label := Text {
+        text: root.text;
+        color: Theme.text-1;
+        font-size: 12px;
+    }
+    t := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+component MenuRow inherits Rectangle {
+    in property <string> text;
+    in property <bool> danger;
+    in property <bool> checked;
+    callback clicked;
+    height: 28px;
+    border-radius: 6px;
+    background: t.has-hover ? Theme.surface-4 : transparent;
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 6px;
+        Text {
+            width: 12px;
+            text: root.checked ? "✓" : "";
+            color: Theme.accent;
+            font-size: 11px;
+            vertical-alignment: center;
+        }
+        Text {
+            text: root.text;
+            color: root.danger ? Theme.danger : Theme.text-1;
+            font-size: 12px;
+            vertical-alignment: center;
+        }
+    }
+    t := TouchArea {
+        clicked => {
+            root.clicked();
         }
     }
 }
@@ -74,60 +406,382 @@ export component PopupWindow inherits Window {
     title: "Rebuffer";
     no-frame: true;
     always-on-top: true;
-    background: #12141a;
+    background: Theme.bg-0;
     preferred-width: 780px;
     preferred-height: 620px;
+    default-font-size: 12px;
 
+    in property <bool> drag-bar;
+    in property <[TabData]> tabs;
     in property <[RowData]> rows;
     in property <string> status;
+    in property <string> sort-label;
+    in property <[string]> sort-options;
+    in property <int> sort-index;
+    in property <string> banner;
+    in property <bool> banner-is-error;
+    in property <bool> empty;
+    in property <string> empty-title;
+    in property <string> empty-body;
+    in property <int> zoom: 3;
+    in property <[MenuEntry]> menu-entries;
+    in-out property <bool> renaming;
+    in-out property <string> rename-text;
+    in-out property <length> scroll-y <=> list.content-y;
+    out property <length> list-height: list.visible-height;
+    property <length> menu-x;
+    property <length> menu-y;
 
     callback search(string);
-    callback activate(int);
-    callback dismiss();
+    callback select-tab(int);
+    callback sort(int);
+    callback add-files();
+    callback card-clicked(int, bool, bool);
+    callback card-activated(int);
+    callback card-context(int);
+    callback card-drag(int);
+    callback menu-action(string);
+    callback rename-commit(string);
+    callback zoom-to(int);
+    callback dismiss-banner();
+    callback start-window-drag();
 
     public function focus-search() {
         search.focus();
         search.select-all();
     }
 
-    FocusScope {
-        key-pressed(event) => {
-            if (event.text == Key.Escape) {
-                root.dismiss();
-                return accept;
-            }
-            reject
-        }
+    public function search-text() -> string {
+        search.text
+    }
 
-        VerticalLayout {
-            padding: 10px;
-            spacing: 8px;
+    public function clear-search() {
+        search.text = "";
+    }
 
-            search := LineEdit {
-                placeholder-text: "Search";
-                edited(text) => {
-                    root.search(text);
+    public function open-menu() {
+        menu.show();
+    }
+
+    public function focus-rename() {
+        rename-input.focus();
+        rename-input.select-all();
+    }
+
+    Rectangle {
+        border-width: 1px;
+        border-color: Theme.window-border;
+    }
+
+    VerticalLayout {
+        if root.drag-bar: Rectangle {
+            height: 28px;
+            TouchArea {
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                        root.start-window-drag();
+                    }
                 }
             }
+        }
 
-            ListView {
-                for row in root.rows: HorizontalLayout {
-                    spacing: Metrics.gap;
-                    padding-bottom: Metrics.gap;
-                    alignment: start;
-                    for card in row.cards: Card {
-                        data: card;
-                        activate(id) => {
-                            root.activate(id);
+        if root.banner != "": Rectangle {
+            height: 34px;
+            background: root.banner-is-error ? Theme.danger.with-alpha(0.18) : Theme.warn.with-alpha(0.18);
+            HorizontalLayout {
+                padding-left: 12px;
+                padding-right: 8px;
+                spacing: 8px;
+                Text {
+                    text: root.banner;
+                    color: Theme.text-1;
+                    font-size: 11px;
+                    vertical-alignment: center;
+                    overflow: elide;
+                    horizontal-stretch: 1;
+                }
+                IconButton {
+                    y: 2px;
+                    text: I18n.tr("popup.dismiss", I18n.revision);
+                    clicked => {
+                        root.dismiss-banner();
+                    }
+                }
+            }
+        }
+
+        // Toolbar: search, sort, add.
+        HorizontalLayout {
+            padding-left: 12px;
+            padding-right: 12px;
+            padding-top: 10px;
+            spacing: 8px;
+            Rectangle {
+                horizontal-stretch: 1;
+                height: 30px;
+                border-radius: 8px;
+                background: Theme.surface-2;
+                border-width: 1px;
+                border-color: search.has-focus ? Theme.accent : Theme.border-1;
+                search := TextInput {
+                    x: 10px;
+                    width: parent.width - 20px;
+                    color: Theme.text-1;
+                    selection-background-color: Theme.accent.with-alpha(0.4);
+                    font-size: 12px;
+                    vertical-alignment: center;
+                    single-line: true;
+                    horizontal-alignment: I18n.rtl ? right : left;
+                    edited => {
+                        root.search(self.text);
+                    }
+                }
+                if search.text == "": Text {
+                    x: 10px;
+                    width: parent.width - 20px;
+                    text: I18n.tr("toolbar.search", I18n.revision);
+                    color: Theme.text-3;
+                    font-size: 12px;
+                    vertical-alignment: center;
+                    horizontal-alignment: I18n.rtl ? right : left;
+                }
+            }
+            IconButton {
+                text: root.sort-label + " ▾";
+                clicked => {
+                    sort-menu.show();
+                }
+            }
+            IconButton {
+                text: "+ " + I18n.tr("toolbar.add", I18n.revision);
+                clicked => {
+                    root.add-files();
+                }
+            }
+        }
+
+        // Tabs.
+        HorizontalLayout {
+            padding-left: 12px;
+            padding-right: 12px;
+            padding-top: 8px;
+            padding-bottom: 4px;
+            spacing: 6px;
+            alignment: I18n.rtl ? end : start;
+            for tab in root.tabs: Chip {
+                text: tab.label;
+                count: tab.count;
+                active: tab.active;
+                clicked => {
+                    root.select-tab(tab.index);
+                }
+            }
+        }
+
+        // The grid.
+        Rectangle {
+            vertical-stretch: 1;
+            list := ListView {
+                for row in root.rows: VerticalLayout {
+                    padding-left: Layout.pad;
+                    padding-right: Layout.pad;
+                    if row.header != "": Rectangle {
+                        height: Layout.header-h;
+                        Text {
+                            x: 2px;
+                            width: parent.width - 4px;
+                            text: row.header;
+                            color: Theme.text-2;
+                            font-size: 11px;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                            horizontal-alignment: I18n.rtl ? right : left;
+                        }
+                    }
+                    if row.header == "": HorizontalLayout {
+                        spacing: Layout.gap;
+                        padding-bottom: Layout.gap;
+                        alignment: I18n.rtl ? end : start;
+                        for card in row.cards: Card {
+                            data: card;
+                            clicked(id, ctrl, shift) => {
+                                root.card-clicked(id, ctrl, shift);
+                            }
+                            activated(id) => {
+                                root.card-activated(id);
+                            }
+                            context(id, x, y) => {
+                                root.menu-x = x;
+                                root.menu-y = y;
+                                root.card-context(id);
+                            }
+                            drag(id) => {
+                                root.card-drag(id);
+                            }
                         }
                     }
                 }
             }
+            if root.empty: VerticalLayout {
+                alignment: center;
+                spacing: 6px;
+                Text {
+                    text: root.empty-title;
+                    color: Theme.text-1;
+                    font-size: 15px;
+                    font-weight: 600;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    text: root.empty-body;
+                    color: Theme.text-2;
+                    font-size: 12px;
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                }
+            }
+        }
 
+        // Footer: status and zoom.
+        HorizontalLayout {
+            height: 34px;
+            padding-left: 14px;
+            padding-right: 12px;
+            spacing: 10px;
             Text {
                 text: root.status;
-                color: #7d869c;
+                color: Theme.text-3;
                 font-size: 11px;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            HorizontalLayout {
+                spacing: 4px;
+                alignment: end;
+                for step in [1, 2, 3, 4, 5]: Rectangle {
+                    width: 16px;
+                    height: 34px;
+                    Rectangle {
+                        width: 4px + step * 1.6px;
+                        height: self.width;
+                        border-radius: self.width / 2;
+                        background: step <= root.zoom ? Theme.accent : Theme.border-3;
+                    }
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.zoom-to(step);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Rename dialog. Always present, shown by `visible`: its input has to be
+    // reachable from focus-rename(), which an `if` would not allow.
+    Rectangle {
+        visible: root.renaming;
+        background: Theme.scrim-1;
+        TouchArea {}
+        Rectangle {
+            width: 340px;
+            height: 104px;
+            border-radius: 12px;
+            background: Theme.surface-3;
+            border-width: 1px;
+            border-color: Theme.border-2;
+            VerticalLayout {
+                padding: 14px;
+                spacing: 10px;
+                Rectangle {
+                    height: 30px;
+                    border-radius: 8px;
+                    background: Theme.bg-0;
+                    border-width: 1px;
+                    border-color: Theme.accent;
+                    rename-input := TextInput {
+                        x: 8px;
+                        width: parent.width - 16px;
+                        text <=> root.rename-text;
+                        color: Theme.text-1;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                        single-line: true;
+                        accepted => {
+                            root.rename-commit(self.text);
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    alignment: end;
+                    spacing: 8px;
+                    IconButton {
+                        text: I18n.tr("popup.cancel", I18n.revision);
+                        clicked => {
+                            root.renaming = false;
+                        }
+                    }
+                    IconButton {
+                        text: I18n.tr("popup.rename", I18n.revision);
+                        clicked => {
+                            root.rename-commit(root.rename-text);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    sort-menu := PopupWindow {
+        x: root.width - 260px;
+        y: 44px;
+        width: 210px;
+        Rectangle {
+            border-radius: 10px;
+            background: Theme.surface-3;
+            border-width: 1px;
+            border-color: Theme.border-2;
+            VerticalLayout {
+                padding: 4px;
+                for option[i] in root.sort-options: MenuRow {
+                    text: option;
+                    checked: i == root.sort-index;
+                    clicked => {
+                        root.sort(i);
+                    }
+                }
+            }
+        }
+    }
+
+    menu := PopupWindow {
+        x: min(root.menu-x, root.width - 214px);
+        y: min(root.menu-y, root.height - root.menu-entries.length * 30px - 12px);
+        width: 200px;
+        Rectangle {
+            border-radius: 10px;
+            background: Theme.surface-3;
+            border-width: 1px;
+            border-color: Theme.border-2;
+            VerticalLayout {
+                padding: 4px;
+                for entry in root.menu-entries: VerticalLayout {
+                    if entry.separator-before: Rectangle {
+                        height: 7px;
+                        Rectangle {
+                            height: 1px;
+                            background: Theme.border-1;
+                        }
+                    }
+                    MenuRow {
+                        text: entry.label;
+                        danger: entry.danger;
+                        clicked => {
+                            root.menu-action(entry.action);
+                        }
+                    }
+                }
             }
         }
     }

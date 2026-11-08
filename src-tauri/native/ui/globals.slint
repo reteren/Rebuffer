@@ -1,0 +1,48 @@
+// Theme colors and translations, filled in from Rust.
+//
+// The themes are the same CSS files the WebView front end uses
+// (src/lib/styles/themes/*.css) and the strings the same locale JSON
+// (src/lib/i18n/locales/*.json): native/src/theme.rs and i18n.rs read them, so
+// a color or a translation is changed in one place for both front ends.
+// The defaults below are the darkblue theme, the app's default.
+
+export global Theme {
+    in-out property <color> bg-0: #0c0e13;
+    in-out property <color> bg-1: #101218b8;
+    in-out property <color> surface-1: #1a1d26c7;
+    in-out property <color> surface-2: #1e222cd1;
+    in-out property <color> surface-3: #262a37eb;
+    in-out property <color> surface-4: #2e3342f2;
+    in-out property <color> overlay-1: #ffffff0f;
+    in-out property <color> scrim-1: #080a0f8c;
+    in-out property <color> scrim-2: #0a0d128c;
+    in-out property <color> border-1: #ffffff12;
+    in-out property <color> border-2: #ffffff21;
+    in-out property <color> border-3: #ffffff38;
+    in-out property <color> window-border: #ffffff14;
+    in-out property <color> text-1: #e9ecf4;
+    in-out property <color> text-2: #e9ecf49e;
+    in-out property <color> text-3: #e9ecf461;
+    in-out property <color> text-bright: #ffffff;
+    in-out property <color> accent: #7aa2ff;
+    in-out property <color> on-accent: #0a0d14;
+    in-out property <color> ext-1: #7aa2ff;
+    in-out property <color> ext-2: #4ec9b0;
+    in-out property <color> ext-3: #bb9af7;
+    in-out property <color> ext-4: #e0af68;
+    in-out property <color> ext-5: #f7768e;
+    in-out property <color> ext-6: #2ac3de;
+    in-out property <color> ext-7: #9ece6a;
+    in-out property <color> danger: #f7768e;
+    in-out property <color> ok: #4ec9b0;
+    in-out property <color> warn: #e0af68;
+}
+
+export global I18n {
+    // Bumped whenever the language changes, and passed to every `tr` call so
+    // the bindings that use it re-evaluate.
+    in-out property <int> revision: 0;
+    // Arabic: right-to-left text alignment and mirrored rows.
+    in-out property <bool> rtl: false;
+    pure callback tr(string, int) -> string;
+}

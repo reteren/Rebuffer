@@ -12,8 +12,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod host;
+mod i18n;
 mod instance;
 mod popup;
+mod theme;
 mod thumbs;
 mod tray;
 
@@ -22,7 +24,35 @@ use std::sync::Arc;
 
 use rebuffer_core::api::Core;
 
+/// `--snapshot <png> [--theme <name>] [--lang <code>]`: render the popup to a
+/// PNG and exit, without activating any window. For checking the interface
+/// without taking focus from whatever the user is doing; the overrides are
+/// not saved.
+pub struct Snapshot {
+    pub path: std::path::PathBuf,
+    pub theme: Option<String>,
+    pub lang: Option<String>,
+}
+
+fn snapshot_args() -> Option<Snapshot> {
+    let args: Vec<String> = std::env::args().collect();
+    let value = |flag: &str| {
+        args.iter()
+            .position(|a| a == flag)
+            .and_then(|i| args.get(i + 1))
+            .cloned()
+    };
+    Some(Snapshot {
+        path: value("--snapshot")?.into(),
+        theme: value("--theme"),
+        lang: value("--lang"),
+    })
+}
+
 fn main() {
+    let snapshot = snapshot_args();
+    let inactive = snapshot.is_some();
+
     // Two processes on one store would both capture every copy and both
     // claim the hotkey. A second launch hands over to the first and leaves.
     if instance::webview_build_running() {
@@ -39,9 +69,9 @@ fn main() {
         .renderer_name("software".into())
         // A tray app: its windows never get a taskbar button, as in the
         // WebView build. The settings window will opt back in when it exists.
-        .with_winit_window_attributes_hook(|attributes| {
+        .with_winit_window_attributes_hook(move |attributes| {
             use slint::winit_030::winit::platform::windows::WindowAttributesExtWindows;
-            attributes.with_skip_taskbar(true)
+            attributes.with_skip_taskbar(true).with_active(!inactive)
         })
         .select()
         .expect("the winit backend with the software renderer is compiled in");
@@ -66,6 +96,12 @@ fn main() {
         instance::refuse(&format!("Rebuffer could not create its window: {e}"));
         return;
     }
+    if let Some(snapshot) = snapshot {
+        popup::snapshot(snapshot);
+        let _ = slint::run_event_loop_until_quit();
+        return;
+    }
+
     let _tray = match tray::install(core.clone()) {
         Ok(t) => t,
         Err(e) => {
