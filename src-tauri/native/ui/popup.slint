@@ -36,6 +36,14 @@ export struct RowData {
     cards: [CardData],
 }
 
+export struct FilterEntry {
+    key: string,
+    label: string,
+    // A group title, not a choice.
+    header: bool,
+    checked: bool,
+}
+
 export struct TabData {
     // Position in the tab list as Rust knows it; the displayed order is
     // reversed for right-to-left languages.
@@ -47,6 +55,8 @@ export struct TabData {
 
 export struct MenuEntry {
     action: string,
+    // Not an action: a line of information (a link's full address).
+    header: bool,
     label: string,
     danger: bool,
     separator-before: bool,
@@ -205,11 +215,12 @@ component Card inherits Rectangle {
         height: parent.height - 16px;
         border-radius: 8px;
         background: Theme.bg-0;
+        // Starts below the time badge, which sits over the panel's corner.
         Text {
             x: 6px;
-            y: 6px;
+            y: Layout.show-age ? 18px : 6px;
             width: parent.width - 12px;
-            height: parent.height - 12px;
+            height: parent.height - self.y - 6px;
             text: data.text;
             color: Theme.text-1;
             font-size: Layout.text-size;
@@ -418,6 +429,8 @@ export component PopupWindow inherits Window {
     in property <string> sort-label;
     in property <[string]> sort-options;
     in property <int> sort-index;
+    in property <string> filter-label;
+    in property <[FilterEntry]> filter-entries;
     in property <string> banner;
     in property <bool> banner-is-error;
     in property <bool> empty;
@@ -435,6 +448,7 @@ export component PopupWindow inherits Window {
     callback search(string);
     callback select-tab(int);
     callback sort(int);
+    callback filter(string);
     callback add-files();
     callback card-clicked(int, bool, bool);
     callback card-activated(int);
@@ -511,12 +525,32 @@ export component PopupWindow inherits Window {
             }
         }
 
-        // Toolbar: search, sort, add.
+        // Toolbar, in the WebView order: add, search, sort, filter. Mirrored
+        // for right-to-left by placing the buttons on the other side; the
+        // search field itself exists once, because functions reach it by id.
         HorizontalLayout {
             padding-left: 12px;
             padding-right: 12px;
             padding-top: 10px;
             spacing: 8px;
+            if !I18n.rtl: IconButton {
+                text: "+ " + I18n.tr("toolbar.add", I18n.revision);
+                clicked => {
+                    root.add-files();
+                }
+            }
+            if I18n.rtl: IconButton {
+                text: root.filter-label + " ▾";
+                clicked => {
+                    filter-menu.show();
+                }
+            }
+            if I18n.rtl: IconButton {
+                text: root.sort-label + " ▾";
+                clicked => {
+                    sort-menu.show();
+                }
+            }
             Rectangle {
                 horizontal-stretch: 1;
                 height: 30px;
@@ -547,13 +581,19 @@ export component PopupWindow inherits Window {
                     horizontal-alignment: I18n.rtl ? right : left;
                 }
             }
-            IconButton {
+            if !I18n.rtl: IconButton {
                 text: root.sort-label + " ▾";
                 clicked => {
                     sort-menu.show();
                 }
             }
-            IconButton {
+            if !I18n.rtl: IconButton {
+                text: root.filter-label + " ▾";
+                clicked => {
+                    filter-menu.show();
+                }
+            }
+            if I18n.rtl: IconButton {
                 text: "+ " + I18n.tr("toolbar.add", I18n.revision);
                 clicked => {
                     root.add-files();
@@ -643,29 +683,55 @@ export component PopupWindow inherits Window {
             }
         }
 
-        // Footer: status and zoom.
+        // Footer: status, settings, zoom; mirrored for right-to-left.
         HorizontalLayout {
             height: 34px;
             padding-left: 14px;
             padding-right: 12px;
             spacing: 10px;
-            Text {
-                text: root.status;
-                color: Theme.text-3;
-                font-size: 11px;
-                vertical-alignment: center;
-                horizontal-stretch: 1;
+            if I18n.rtl: HorizontalLayout {
+                spacing: 4px;
+                for step in [1, 2, 3, 4, 5]: Rectangle {
+                    width: 16px;
+                    height: 34px;
+                    Rectangle {
+                        width: 4px + step * 1.6px;
+                        height: self.width;
+                        border-radius: self.width / 2;
+                        background: step <= root.zoom ? Theme.accent : Theme.border-3;
+                    }
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.zoom-to(step);
+                        }
+                    }
+                }
             }
-            IconButton {
+            if I18n.rtl: IconButton {
                 y: 2px;
                 text: "⚙";
                 clicked => {
                     root.open-settings();
                 }
             }
-            HorizontalLayout {
+            Text {
+                text: root.status;
+                color: Theme.text-3;
+                font-size: 11px;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+                horizontal-alignment: I18n.rtl ? right : left;
+            }
+            if !I18n.rtl: IconButton {
+                y: 2px;
+                text: "⚙";
+                clicked => {
+                    root.open-settings();
+                }
+            }
+            if !I18n.rtl: HorizontalLayout {
                 spacing: 4px;
-                alignment: end;
                 for step in [1, 2, 3, 4, 5]: Rectangle {
                     width: 16px;
                     height: 34px;
@@ -742,7 +808,7 @@ export component PopupWindow inherits Window {
     }
 
     sort-menu := PopupWindow {
-        x: root.width - 260px;
+        x: I18n.rtl ? 12px : root.width - 260px;
         y: 44px;
         width: 210px;
         Rectangle {
@@ -757,6 +823,38 @@ export component PopupWindow inherits Window {
                     checked: i == root.sort-index;
                     clicked => {
                         root.sort(i);
+                    }
+                }
+            }
+        }
+    }
+
+    filter-menu := PopupWindow {
+        x: I18n.rtl ? 12px : root.width - 230px;
+        y: 44px;
+        width: 200px;
+        Rectangle {
+            border-radius: 10px;
+            background: Theme.surface-3;
+            border-width: 1px;
+            border-color: Theme.border-2;
+            VerticalLayout {
+                padding: 4px;
+                for entry in root.filter-entries: VerticalLayout {
+                    if entry.header: Text {
+                        height: 24px;
+                        text: entry.label;
+                        color: Theme.text-3;
+                        font-size: 10px;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                    }
+                    if !entry.header: MenuRow {
+                        text: entry.label;
+                        checked: entry.checked;
+                        clicked => {
+                            root.filter(entry.key);
+                        }
                     }
                 }
             }
@@ -782,7 +880,16 @@ export component PopupWindow inherits Window {
                             background: Theme.border-1;
                         }
                     }
-                    MenuRow {
+                    if entry.header: Text {
+                        width: 184px;
+                        text: entry.label;
+                        color: Theme.text-2;
+                        font-size: 10px;
+                        wrap: word-wrap;
+                        max-height: 52px;
+                        overflow: elide;
+                    }
+                    if !entry.header: MenuRow {
                         text: entry.label;
                         danger: entry.danger;
                         clicked => {

@@ -84,6 +84,8 @@ enum Row {
 #[derive(Default)]
 struct View {
     tab: usize,
+    /// The tab's preset, refined by the toolbar filter.
+    filter: Filter,
     sort: usize,
     query: String,
     items: Vec<ItemDto>,
@@ -291,11 +293,18 @@ fn wire_callbacks(ui: &PopupWindow) {
     });
     ui.on_select_tab(|i| {
         with(|p| {
-            p.view.borrow_mut().tab = (i as usize).min(TABS.len() - 1);
+            {
+                let mut v = p.view.borrow_mut();
+                v.tab = (i as usize).min(TABS.len() - 1);
+                v.filter = tab_filter(v.tab);
+            }
             p.clear_selection();
             p.ui.set_scroll_y(0.0);
             p.reload(false);
         });
+    });
+    ui.on_filter(|key| {
+        with(|p| p.apply_filter(key.as_str()));
     });
     ui.on_sort(|i| {
         with(|p| {
@@ -637,6 +646,9 @@ impl Popup {
     fn apply_settings(&self) {
         let s = self.core.settings.get();
         crate::theme::apply(&self.ui, &s.appearance.theme, &s.appearance.accent);
+        self.ui
+            .global::<Theme>()
+            .set_reduce_motion(s.appearance.reduce_motion);
         crate::i18n::apply(&self.ui, &s.appearance.language);
         self.ui.set_drag_bar(s.window.drag_bar);
 
@@ -701,7 +713,7 @@ impl Popup {
         let (filter, sort, query, loaded) = {
             let v = self.view.borrow();
             (
-                tab_filter(v.tab),
+                v.filter.clone(),
                 SORTS[v.sort].0,
                 v.query.trim().to_string(),
                 v.items.len() as u32,
@@ -740,7 +752,7 @@ impl Popup {
         let (filter, sort, offset, query_empty, has_more) = {
             let v = self.view.borrow();
             (
-                tab_filter(v.tab),
+                v.filter.clone(),
                 SORTS[v.sort].0,
                 v.items.len() as u32,
                 v.query.trim().is_empty(),
@@ -798,6 +810,7 @@ impl Popup {
         self.ui.set_tabs(ModelRc::new(VecModel::from(tabs)));
         self.ui.set_sort_label(tr(SORTS[v.sort].1).into());
         self.ui.set_sort_index(v.sort as i32);
+        self.refresh_filter_menu(&v.filter);
 
         let total = self.core.store.stats().map(|s| s.total_bytes).unwrap_or(0);
         self.ui.set_status(
@@ -820,6 +833,95 @@ impl Popup {
             self.ui
                 .set_empty_body(tr(&format!("empty.{key}Body")).into());
         }
+    }
+
+    /// The toolbar filter: a kind, links, or one extension, on top of what
+    /// the tab already restricts (pinned, added files). Picking the filter
+    /// a tab stands for selects that tab, as in the WebView toolbar.
+    fn apply_filter(&self, key: &str) {
+        {
+            let mut v = self.view.borrow_mut();
+            let f = &mut v.filter;
+            f.kind = None;
+            f.sub_kind = None;
+            f.ext = None;
+            match key {
+                "all" => {}
+                "k:link" => f.sub_kind = Some(SubKind::Link),
+                "k:image" => f.kind = Some(Kind::Image),
+                "k:text" => f.kind = Some(Kind::Text),
+                "k:file" => f.kind = Some(Kind::File),
+                "k:video" => f.kind = Some(Kind::Video),
+                "k:other" => f.kind = Some(Kind::Other),
+                other => f.ext = other.strip_prefix("e:").map(str::to_string),
+            }
+            let filter = v.filter.clone();
+            if let Some(tab) = (0..TABS.len()).find(|&t| same_filter(&tab_filter(t), &filter)) {
+                v.tab = tab;
+            }
+        }
+        self.clear_selection();
+        self.ui.set_scroll_y(0.0);
+        self.reload(false);
+    }
+
+    fn refresh_filter_menu(&self, filter: &Filter) {
+        let current = if let Some(ext) = &filter.ext {
+            format!("e:{ext}")
+        } else if filter.sub_kind == Some(SubKind::Link) {
+            "k:link".into()
+        } else if let Some(kind) = filter.kind {
+            format!("k:{}", kind.as_str())
+        } else {
+            "all".into()
+        };
+        let option = |key: &str, label: String| FilterEntry {
+            checked: key == current,
+            key: key.into(),
+            label: label.into(),
+            header: false,
+        };
+        let header = |key: &str| FilterEntry {
+            key: SharedString::new(),
+            label: tr(key).into(),
+            header: true,
+            checked: false,
+        };
+        let mut entries = vec![
+            header("toolbar.groupType"),
+            option("all", tr("toolbar.filterAll")),
+            option("k:image", tr("toolbar.kindImages")),
+            option("k:text", tr("toolbar.kindText")),
+            option("k:link", tr("toolbar.kindLinks")),
+            option("k:file", tr("toolbar.kindFiles")),
+            option("k:video", tr("toolbar.kindVideo")),
+            option("k:other", tr("toolbar.kindOther")),
+        ];
+        // Extensions present under the tab's own restriction, without the
+        // extension itself (or the list would shrink to the one picked).
+        let mut base = filter.clone();
+        base.ext = None;
+        let facets = self.core.store.ext_facets(&base).unwrap_or_default();
+        if !facets.is_empty() {
+            entries.push(header("toolbar.groupExtension"));
+            for f in facets {
+                let key = format!("e:{}", f.ext);
+                entries.push(option(&key, format!("{} ({})", f.ext, f.count)));
+            }
+        }
+        let label = entries
+            .iter()
+            .find(|e| e.checked)
+            .map(|e| e.label.to_string())
+            .unwrap_or_else(|| tr("toolbar.filter"));
+        let label = if current == "all" {
+            tr("toolbar.filter")
+        } else {
+            label
+        };
+        self.ui.set_filter_label(label.into());
+        self.ui
+            .set_filter_entries(ModelRc::new(VecModel::from(entries)));
     }
 
     /// Recomputes how many cards fit across, and re-lays the rows if that
@@ -1075,7 +1177,21 @@ impl Popup {
 
     fn open_menu(&self, id: i64) {
         let Some(item) = self.item(id) else { return };
-        let mut entries = vec![entry("copy", "menu.copy", false, false)];
+        let mut entries = Vec::new();
+        // A card can only show a link as its site; the menu says where it
+        // actually points. The WebView popup hangs this over the card.
+        if item.sub_kind == Some(SubKind::Link) {
+            if let Some(url) = item.preview_text.as_deref().filter(|u| !u.is_empty()) {
+                entries.push(MenuEntry {
+                    action: SharedString::new(),
+                    header: true,
+                    label: url.into(),
+                    danger: false,
+                    separator_before: false,
+                });
+            }
+        }
+        entries.push(entry("copy", "menu.copy", false, !entries.is_empty()));
         if item.sub_kind == Some(SubKind::Rich) {
             entries.push(entry("copyPlain", "menu.copyPlain", false, false));
         }
@@ -1261,9 +1377,18 @@ impl Popup {
     }
 }
 
+fn same_filter(a: &Filter, b: &Filter) -> bool {
+    a.kind == b.kind
+        && a.ext == b.ext
+        && a.pinned_only == b.pinned_only
+        && a.sub_kind == b.sub_kind
+        && a.references_only == b.references_only
+}
+
 fn entry(action: &str, key: &str, danger: bool, separator_before: bool) -> MenuEntry {
     MenuEntry {
         action: action.into(),
+        header: false,
         label: tr(key).into(),
         danger,
         separator_before,

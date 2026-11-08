@@ -111,6 +111,28 @@ component Button inherits Rectangle {
     }
 }
 
+component Switch inherits Rectangle {
+    in property <bool> checked;
+    in property <bool> enabled: true;
+    width: 34px;
+    height: 20px;
+    y: 0;
+    border-radius: 10px;
+    background: root.checked ? Theme.accent : Theme.surface-4;
+    border-width: 1px;
+    border-color: Theme.border-2;
+    opacity: root.enabled ? 1 : 0.45;
+    Rectangle {
+        // Mirrored with the text: "on" is the end the text runs toward.
+        x: (root.checked != I18n.rtl) ? parent.width - self.width - 3px : 3px;
+        width: 14px;
+        height: 14px;
+        border-radius: 7px;
+        background: root.checked ? Theme.on-accent : Theme.text-2;
+        animate x { duration: Theme.reduce-motion ? 0ms : 120ms; }
+    }
+}
+
 // A labelled switch with an optional hint under it.
 component Toggle inherits VerticalLayout {
     in property <string> text;
@@ -121,27 +143,18 @@ component Toggle inherits VerticalLayout {
     spacing: 3px;
     HorizontalLayout {
         spacing: 10px;
-        Rectangle {
-            width: 34px;
-            height: 20px;
-            y: 0;
-            border-radius: 10px;
-            background: root.checked ? Theme.accent : Theme.surface-4;
-            border-width: 1px;
-            border-color: Theme.border-2;
-            opacity: root.enabled ? 1 : 0.45;
-            Rectangle {
-                x: root.checked ? parent.width - self.width - 3px : 3px;
-                width: 14px;
-                height: 14px;
-                border-radius: 7px;
-                background: root.checked ? Theme.on-accent : Theme.text-2;
-                animate x { duration: 120ms; }
-            }
+        // The switch leads the label, from whichever side the text starts.
+        if !I18n.rtl: Switch {
+            checked: root.checked;
+            enabled: root.enabled;
         }
         Label {
             text: root.text;
             horizontal-stretch: 1;
+        }
+        if I18n.rtl: Switch {
+            checked: root.checked;
+            enabled: root.enabled;
         }
     }
     if root.hint != "": Hint {
@@ -166,7 +179,7 @@ component NumberField inherits Rectangle {
     height: 30px;
     HorizontalLayout {
         spacing: 8px;
-        alignment: start;
+        alignment: I18n.rtl ? end : start;
         Rectangle {
             width: root.field-width;
             border-radius: 8px;
@@ -395,12 +408,14 @@ export component SettingsWindow inherits Window {
             }
         }
 
-        HorizontalLayout {
+        Rectangle {
             vertical-stretch: 1;
 
-            // Section list.
+            // Section list, on the side the text starts from.
             Rectangle {
+                x: I18n.rtl ? parent.width - 190px : 0;
                 width: 190px;
+                height: parent.height;
                 background: Theme.surface-1;
                 VerticalLayout {
                     padding: 10px;
@@ -429,12 +444,16 @@ export component SettingsWindow inherits Window {
                 }
             }
             Rectangle {
+                x: I18n.rtl ? parent.width - 191px : 190px;
                 width: 1px;
+                height: parent.height;
                 background: Theme.border-1;
             }
 
             ScrollView {
-                horizontal-stretch: 1;
+                x: I18n.rtl ? 0 : 191px;
+                width: parent.width - 191px;
+                height: parent.height;
                 VerticalLayout {
                     alignment: start;
 
@@ -445,7 +464,7 @@ export component SettingsWindow inherits Window {
                             title: I18n.tr("settings.hotkey", I18n.revision);
                             HorizontalLayout {
                                 spacing: 8px;
-                                alignment: start;
+                                alignment: I18n.rtl ? end : start;
                                 recorder := FocusScope {
                                     width: 200px;
                                     height: 32px;
@@ -582,6 +601,7 @@ export component SettingsWindow inherits Window {
                                         font-family: "Cascadia Mono";
                                         font-size: 11px;
                                         vertical-alignment: center;
+                                        horizontal-alignment: I18n.rtl ? right : left;
                                         overflow: elide;
                                     }
                                 }
@@ -659,7 +679,7 @@ export component SettingsWindow inherits Window {
                             // A fixed width: a width taken from the scroll view's
                             // content would depend on itself.
                             HorizontalLayout {
-                                alignment: start;
+                                alignment: I18n.rtl ? end : start;
                                 Rectangle {
                                     width: 420px;
                                     height: 12px;
@@ -667,7 +687,7 @@ export component SettingsWindow inherits Window {
                                     background: Theme.surface-2;
                                     clip: true;
                                     HorizontalLayout {
-                                        alignment: start;
+                                        alignment: I18n.rtl ? end : start;
                                         for seg in root.usage: Rectangle {
                                             width: 420px * seg.fraction;
                                             background: seg.color;
@@ -677,7 +697,8 @@ export component SettingsWindow inherits Window {
                             }
                             for seg in root.usage: HorizontalLayout {
                                 spacing: 6px;
-                                Rectangle {
+                                alignment: I18n.rtl ? end : start;
+                                if !I18n.rtl: Rectangle {
                                     width: 8px;
                                     height: 8px;
                                     y: 4px;
@@ -688,10 +709,17 @@ export component SettingsWindow inherits Window {
                                     text: seg.label;
                                     color: Theme.text-2;
                                 }
+                                if I18n.rtl: Rectangle {
+                                    width: 8px;
+                                    height: 8px;
+                                    y: 4px;
+                                    border-radius: 4px;
+                                    background: seg.color;
+                                }
                             }
                             HorizontalLayout {
                                 spacing: 8px;
-                                alignment: start;
+                                alignment: I18n.rtl ? end : start;
                                 NumberField {
                                     value: root.clean-days;
                                     field-width: 90px;
@@ -723,7 +751,7 @@ export component SettingsWindow inherits Window {
                             title: I18n.tr("settings.theme", I18n.revision);
                             HorizontalLayout {
                                 spacing: 8px;
-                                alignment: start;
+                                alignment: I18n.rtl ? end : start;
                                 for swatch in root.themes: ThemeTile {
                                     swatch: swatch;
                                     selected: swatch.name == root.data.theme;
@@ -734,7 +762,7 @@ export component SettingsWindow inherits Window {
                             }
                             HorizontalLayout {
                                 spacing: 8px;
-                                alignment: start;
+                                alignment: I18n.rtl ? end : start;
                                 for swatch in root.themes-more: ThemeTile {
                                     swatch: swatch;
                                     selected: swatch.name == root.data.theme;
@@ -751,7 +779,7 @@ export component SettingsWindow inherits Window {
                             title: I18n.tr("settings.language", I18n.revision);
                             HorizontalLayout {
                                 spacing: 4px;
-                                alignment: start;
+                                alignment: I18n.rtl ? end : start;
                                 Segmented {
                                     options: [I18n.tr("settings.languageSystem", I18n.revision)];
                                     selected: root.data.language == "system" ? 0 : -1;
@@ -789,7 +817,7 @@ export component SettingsWindow inherits Window {
                             }
                             if !root.data.size-percent: HorizontalLayout {
                                 spacing: 8px;
-                                alignment: start;
+                                alignment: I18n.rtl ? end : start;
                                 NumberField {
                                     value: root.data.fixed-w;
                                     suffix: "×";
@@ -872,7 +900,7 @@ export component SettingsWindow inherits Window {
                             title: I18n.tr("settings.accent", I18n.revision);
                             HorizontalLayout {
                                 spacing: 6px;
-                                alignment: start;
+                                alignment: I18n.rtl ? end : start;
                                 Rectangle {
                                     width: 30px;
                                     height: 30px;
@@ -932,7 +960,7 @@ export component SettingsWindow inherits Window {
                             }
                             for p in root.data.blocked: HorizontalLayout {
                                 spacing: 8px;
-                                alignment: start;
+                                alignment: I18n.rtl ? end : start;
                                 Rectangle {
                                     width: 260px;
                                     height: 28px;
@@ -956,7 +984,7 @@ export component SettingsWindow inherits Window {
                             }
                             HorizontalLayout {
                                 spacing: 8px;
-                                alignment: start;
+                                alignment: I18n.rtl ? end : start;
                                 Rectangle {
                                     width: 260px;
                                     height: 30px;
@@ -1005,7 +1033,7 @@ export component SettingsWindow inherits Window {
                                 text: I18n.tr("settings.exportHint", I18n.revision);
                             }
                             HorizontalLayout {
-                                alignment: start;
+                                alignment: I18n.rtl ? end : start;
                                 Button {
                                     text: I18n.tr("settings.exportButton", I18n.revision);
                                     clicked => {
@@ -1024,7 +1052,7 @@ export component SettingsWindow inherits Window {
                                 }
                             }
                             HorizontalLayout {
-                                alignment: start;
+                                alignment: I18n.rtl ? end : start;
                                 Button {
                                     text: I18n.tr("settings.importButton", I18n.revision);
                                     clicked => {
@@ -1039,7 +1067,7 @@ export component SettingsWindow inherits Window {
                                 text: I18n.tr("settings.clearHistoryHint", I18n.revision);
                             }
                             HorizontalLayout {
-                                alignment: start;
+                                alignment: I18n.rtl ? end : start;
                                 Button {
                                     danger: true;
                                     text: root.confirm-clear ? "Click again to confirm" : I18n.tr("settings.clearHistory", I18n.revision);
@@ -1061,7 +1089,7 @@ export component SettingsWindow inherits Window {
                                 text: I18n.tr("settings.resetAllHint", I18n.revision);
                             }
                             HorizontalLayout {
-                                alignment: start;
+                                alignment: I18n.rtl ? end : start;
                                 Button {
                                     danger: true;
                                     text: root.confirm-reset ? "Click again to confirm" : I18n.tr("settings.resetAll", I18n.revision);
@@ -1100,7 +1128,7 @@ export component SettingsWindow inherits Window {
                         }
                         // Required by the Slint Royalty-free license this build uses.
                         HorizontalLayout {
-                            alignment: start;
+                            alignment: I18n.rtl ? end : start;
                             AboutSlint {
                                 width: 240px;
                             }

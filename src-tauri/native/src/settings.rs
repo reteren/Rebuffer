@@ -481,6 +481,9 @@ impl Window {
     fn refresh(&self) {
         let s = self.core.settings.get();
         crate::theme::apply(&self.ui, &s.appearance.theme, &s.appearance.accent);
+        self.ui
+            .global::<crate::ui::Theme>()
+            .set_reduce_motion(s.appearance.reduce_motion);
         crate::i18n::apply(&self.ui, &s.appearance.language);
         self.ui.set_data(data(&s));
         // Six to a row fits the narrowest window.

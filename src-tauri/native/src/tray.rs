@@ -18,6 +18,7 @@ struct Tray {
     settings: MenuItem,
     capture: MenuItem,
     quit: MenuId,
+    quit_item: MenuItem,
     core: Rc<Core>,
 }
 
@@ -55,12 +56,13 @@ fn icons() -> Result<(Icon, Icon), String> {
     Ok((normal, muted))
 }
 
-fn capture_label(enabled: bool) -> &'static str {
-    if enabled {
-        "Pause capture"
+/// The WebView tray menu's own strings, so both builds say the same thing.
+fn capture_label(enabled: bool) -> String {
+    crate::i18n::tr(if enabled {
+        "tray.disableCapture"
     } else {
-        "Resume capture"
-    }
+        "tray.enableCapture"
+    })
 }
 
 pub fn install(core: Rc<Core>) -> Result<TrayGuard, String> {
@@ -70,7 +72,7 @@ pub fn install(core: Rc<Core>) -> Result<TrayGuard, String> {
     let open = MenuItem::new("Open Rebuffer", true, None);
     let settings = MenuItem::new(crate::i18n::tr("tray.settings"), true, None);
     let capture = MenuItem::new(capture_label(enabled), true, None);
-    let quit = MenuItem::new("Quit", true, None);
+    let quit = MenuItem::new(crate::i18n::tr("tray.quit"), true, None);
     let menu = Menu::new();
     menu.append_items(&[
         &open,
@@ -117,6 +119,7 @@ pub fn install(core: Rc<Core>) -> Result<TrayGuard, String> {
             settings,
             capture,
             quit: quit.id().clone(),
+            quit_item: quit.clone(),
             core,
         });
     });
@@ -130,7 +133,10 @@ pub fn sync() {
         let t = t.borrow();
         let Some(tray) = t.as_ref() else { return };
         let enabled = tray.core.clipboard.is_enabled();
+        // Labels follow the interface language as well as the state.
         tray.capture.set_text(capture_label(enabled));
+        tray.settings.set_text(crate::i18n::tr("tray.settings"));
+        tray.quit_item.set_text(crate::i18n::tr("tray.quit"));
         let icon = if enabled { &tray.normal } else { &tray.muted };
         if let Err(e) = tray.icon.set_icon(Some(icon.clone())) {
             tracing::warn!("tray icon not updated: {e}");
