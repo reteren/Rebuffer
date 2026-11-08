@@ -16,7 +16,10 @@ impl Host for NativeHost {
             | events::ITEM_UPDATED
             | events::ITEMS_DELETED
             | events::CLIPBOARD_CURRENT => crate::popup::history_changed(),
-            events::SETTINGS_CHANGED => crate::popup::settings_changed(),
+            events::SETTINGS_CHANGED => {
+                crate::popup::settings_changed();
+                crate::tray::sync();
+            }
             events::STORAGE_WARNING => match serde_json::from_value(payload) {
                 Ok(w) => crate::popup::storage_warning(w),
                 Err(e) => tracing::warn!("storage warning with an unreadable payload: {e}"),

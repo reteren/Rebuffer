@@ -120,6 +120,13 @@ impl Core {
                 host::emit(&*capture_host, events::ITEM_ADDED, &item);
             }),
         )?);
+        // The listener starts enabled; a user who paused capture and
+        // restarted would otherwise see the muted tray icon over a listener
+        // that is quietly recording again.
+        clipboard.set_enabled(resolved.behavior.capture_enabled);
+        if !resolved.behavior.capture_enabled {
+            tracing::info!("capture is paused by settings");
+        }
 
         let hotkeys = Arc::new(HotkeyManager::new(on_hotkey)?);
 
@@ -152,17 +159,26 @@ impl Core {
         let weak_store = Arc::downgrade(&store);
         let weak_hotkeys = Arc::downgrade(&hotkeys);
         let weak_settings = Arc::downgrade(&settings);
+        let weak_clipboard = Arc::downgrade(&clipboard);
         let reload_host = host.clone();
         settings.set_on_reload(Arc::new(move |before: &Settings, next: &Settings| {
-            let (Some(store), Some(hotkeys), Some(settings)) = (
+            let (Some(store), Some(hotkeys), Some(settings), Some(clipboard)) = (
                 weak_store.upgrade(),
                 weak_hotkeys.upgrade(),
                 weak_settings.upgrade(),
+                weak_clipboard.upgrade(),
             ) else {
                 return;
             };
             tracing::info!("settings.json changed on disk; applying it");
-            if let Err(e) = apply_live(&store, &hotkeys, &settings, &*reload_host, before, next) {
+            let live = Live {
+                store: &store,
+                hotkeys: &hotkeys,
+                settings: &settings,
+                clipboard: &clipboard,
+                host: &*reload_host,
+            };
+            if let Err(e) = live.apply(before, next) {
                 tracing::warn!("hand-edited settings not fully applied: {e}");
             }
         }));
@@ -282,15 +298,33 @@ impl Core {
         }
 
         let next = self.settings.patch(patch)?;
-        apply_live(
-            &self.store,
-            &self.hotkeys,
-            &self.settings,
-            &*self.host,
-            &before,
-            &next,
-        )
+        self.live().apply(&before, &next)
     }
+
+    /// Pauses or resumes capture, and remembers it: the tray toggle and the
+    /// settings switch are the same setting.
+    pub fn set_capture_enabled(&self, enabled: bool) -> AppResult<Settings> {
+        self.update_settings(serde_json::json!({ "behavior": { "captureEnabled": enabled } }))
+    }
+
+    fn live(&self) -> Live<'_> {
+        Live {
+            store: &self.store,
+            hotkeys: &self.hotkeys,
+            settings: &self.settings,
+            clipboard: &self.clipboard,
+            host: &*self.host,
+        }
+    }
+}
+
+/// What a settings change has to reach.
+struct Live<'a> {
+    store: &'a Store,
+    hotkeys: &'a HotkeyManager,
+    settings: &'a SettingsStore,
+    clipboard: &'a ClipboardWatcher,
+    host: &'a dyn Host,
 }
 
 fn retention_policy(s: &Settings) -> RetentionPolicy {
@@ -304,65 +338,73 @@ fn retention_policy(s: &Settings) -> RetentionPolicy {
 /// saving the file changes nothing on its own. Shared by the settings window
 /// and by hand edits of the file, so the two cannot disagree on what a change
 /// does. Announces the outcome as `settings-changed` and returns it.
-fn apply_live(
-    store: &Store,
-    hotkeys: &HotkeyManager,
-    settings: &SettingsStore,
-    host: &dyn Host,
-    before: &Settings,
-    next: &Settings,
-) -> AppResult<Settings> {
-    if next.hotkey.binding != before.hotkey.binding
-        || next.hotkey.aggressive_mode != before.hotkey.aggressive_mode
-    {
-        let applied = Chord::parse(&next.hotkey.binding)
-            .and_then(|chord| hotkeys.rebind(&chord, next.hotkey.aggressive_mode));
-        if let Err(e) = applied {
-            // The registration failed and the manager kept the old chord, so
-            // roll the file back to match the runtime rather than letting the
-            // two disagree. The rest of the change stays applied: one refused
-            // hotkey should not discard the user's other changes.
-            let rollback = serde_json::json!({
-                "hotkey": {
-                    "binding": before.hotkey.binding,
-                    "aggressiveMode": before.hotkey.aggressive_mode,
-                }
-            });
-            let reverted = settings.patch(rollback)?;
-            apply_rest(store, before, &reverted);
-            host::emit(host, events::SETTINGS_CHANGED, &reverted);
-            return Err(e);
+impl Live<'_> {
+    fn apply(&self, before: &Settings, next: &Settings) -> AppResult<Settings> {
+        let (hotkeys, settings, host) = (self.hotkeys, self.settings, self.host);
+        if next.hotkey.binding != before.hotkey.binding
+            || next.hotkey.aggressive_mode != before.hotkey.aggressive_mode
+        {
+            let applied = Chord::parse(&next.hotkey.binding)
+                .and_then(|chord| hotkeys.rebind(&chord, next.hotkey.aggressive_mode));
+            if let Err(e) = applied {
+                // The registration failed and the manager kept the old chord, so
+                // roll the file back to match the runtime rather than letting the
+                // two disagree. The rest of the change stays applied: one refused
+                // hotkey should not discard the user's other changes.
+                let rollback = serde_json::json!({
+                    "hotkey": {
+                        "binding": before.hotkey.binding,
+                        "aggressiveMode": before.hotkey.aggressive_mode,
+                    }
+                });
+                let reverted = settings.patch(rollback)?;
+                self.apply_rest(before, &reverted);
+                host::emit(host, events::SETTINGS_CHANGED, &reverted);
+                return Err(e);
+            }
         }
+
+        self.apply_rest(before, next);
+        host::emit(host, events::SETTINGS_CHANGED, next);
+        Ok(next.clone())
     }
 
-    apply_rest(store, before, next);
-    host::emit(host, events::SETTINGS_CHANGED, next);
-    Ok(next.clone())
-}
+    /// Everything in `apply` past the hotkey, which cannot fail.
+    fn apply_rest(&self, before: &Settings, next: &Settings) {
+        let store = self.store;
+        if next.behavior.capture_enabled != before.behavior.capture_enabled {
+            self.clipboard.set_enabled(next.behavior.capture_enabled);
+            tracing::info!(
+                "capture {}",
+                if next.behavior.capture_enabled {
+                    "resumed"
+                } else {
+                    "paused"
+                }
+            );
+        }
+        if next.storage.temp_files_days != before.storage.temp_files_days {
+            crate::shell::set_temp_files_days(next.storage.temp_files_days);
+        }
 
-/// Everything in `apply_live` past the hotkey, which cannot fail.
-fn apply_rest(store: &Store, before: &Settings, next: &Settings) {
-    if next.storage.temp_files_days != before.storage.temp_files_days {
-        crate::shell::set_temp_files_days(next.storage.temp_files_days);
-    }
+        if next.storage.retention_days != before.storage.retention_days
+            || next.storage.max_store_bytes != before.storage.max_store_bytes
+        {
+            store.set_retention_policy(retention_policy(next));
+        }
 
-    if next.storage.retention_days != before.storage.retention_days
-        || next.storage.max_store_bytes != before.storage.max_store_bytes
-    {
-        store.set_retention_policy(retention_policy(next));
-    }
-
-    if next.privacy.link_previews != before.privacy.link_previews {
-        store.set_link_previews(next.privacy.link_previews);
-        // Switching it on is the user asking for previews, not just for
-        // previews from here on: the links already in history are looked up
-        // too. Failures are the lookup's business, so this never blocks the
-        // save.
-        if next.privacy.link_previews {
-            match store.backfill_link_previews() {
-                Ok(n) if n > 0 => tracing::info!("looking up {n} link(s) already in history"),
-                Ok(_) => {}
-                Err(e) => tracing::warn!("could not queue existing links: {e}"),
+        if next.privacy.link_previews != before.privacy.link_previews {
+            store.set_link_previews(next.privacy.link_previews);
+            // Switching it on is the user asking for previews, not just for
+            // previews from here on: the links already in history are looked up
+            // too. Failures are the lookup's business, so this never blocks the
+            // save.
+            if next.privacy.link_previews {
+                match store.backfill_link_previews() {
+                    Ok(n) if n > 0 => tracing::info!("looking up {n} link(s) already in history"),
+                    Ok(_) => {}
+                    Err(e) => tracing::warn!("could not queue existing links: {e}"),
+                }
             }
         }
     }

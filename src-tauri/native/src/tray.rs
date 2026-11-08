@@ -114,6 +114,21 @@ pub fn install(core: Rc<Core>) -> Result<TrayGuard, String> {
     Ok(TrayGuard)
 }
 
+/// Makes the icon and the menu label match whether capture is on — after the
+/// tray toggle, the settings window, or a hand edit of settings.json.
+pub fn sync() {
+    TRAY.with(|t| {
+        let t = t.borrow();
+        let Some(tray) = t.as_ref() else { return };
+        let enabled = tray.core.clipboard.is_enabled();
+        tray.capture.set_text(capture_label(enabled));
+        let icon = if enabled { &tray.normal } else { &tray.muted };
+        if let Err(e) = tray.icon.set_icon(Some(icon.clone())) {
+            tracing::warn!("tray icon not updated: {e}");
+        }
+    });
+}
+
 fn on_menu(id: &MenuId) {
     TRAY.with(|t| {
         let t = t.borrow();
@@ -121,14 +136,12 @@ fn on_menu(id: &MenuId) {
         if *id == tray.open {
             crate::popup::show();
         } else if id == tray.capture.id() {
+            // Saved and applied by the core; the icon follows on the
+            // settings-changed that comes back (see `sync`).
             let enabled = !tray.core.clipboard.is_enabled();
-            tray.core.clipboard.set_enabled(enabled);
-            tray.capture.set_text(capture_label(enabled));
-            let icon = if enabled { &tray.normal } else { &tray.muted };
-            if let Err(e) = tray.icon.set_icon(Some(icon.clone())) {
-                tracing::warn!("tray icon not updated: {e}");
+            if let Err(e) = tray.core.set_capture_enabled(enabled) {
+                tracing::warn!("capture toggle failed: {e}");
             }
-            tracing::info!("capture {}", if enabled { "resumed" } else { "paused" });
         } else if *id == tray.quit {
             let _ = slint::quit_event_loop();
         }

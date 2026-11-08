@@ -210,7 +210,9 @@ pub fn set_capture_enabled(
     state: State<'_, AppState>,
     enabled: bool,
 ) -> AppResult<()> {
-    state.clipboard.set_enabled(enabled);
+    // Saved as well as applied: the tray toggle and the settings switch are
+    // one setting, and a pause has to survive a restart.
+    state.set_capture_enabled(enabled)?;
     crate::tray::set_capture_enabled(&app, enabled)?;
     Ok(())
 }
