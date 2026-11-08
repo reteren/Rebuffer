@@ -1,8 +1,8 @@
 use std::time::Instant;
 use tempfile::tempdir;
 
-use rebuffer_lib::model::{Filter, Sort};
-use rebuffer_lib::store::Store;
+use rebuffer_core::model::{Filter, Sort};
+use rebuffer_core::store::Store;
 
 #[test]
 #[ignore]

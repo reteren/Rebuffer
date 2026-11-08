@@ -7,65 +7,25 @@
 //!
 //! OWNER: the coordinator. Workers add to their own modules, not here.
 
-pub mod capture;
-pub mod clipboard;
 pub mod commands;
-pub mod error;
-pub mod hotkey;
-pub mod logging;
-pub mod model;
-pub mod preview;
-pub mod settings;
-pub mod shell;
-pub mod shellthumb;
-pub mod store;
+pub mod tauri_host;
 pub mod tray;
 pub mod window;
 
-use std::sync::atomic::{AtomicI64, Ordering};
+// The core under its old paths, so `crate::store`, `crate::settings` and the
+// rest read the same in the Tauri glue as they did before the split.
+pub use rebuffer_core::{
+    capture, clipboard, current_clipboard_id, error, host, hotkey, logging, model, preview,
+    set_current_clipboard_id, settings, shell, shellthumb, store,
+};
+
 use std::sync::Arc;
 
 use tauri::Manager;
 
-use crate::clipboard::ClipboardWatcher;
-use crate::settings::SettingsStore;
-use crate::store::Store;
-
-/// The item currently sitting on the clipboard, or 0 for "none we know of".
-///
-/// Every clipboard change is either a capture we just stored or a write we made
-/// ourselves, so the id is known at both moments; there is nowhere else it can
-/// come from. It is deliberately not persisted — after a restart the clipboard
-/// may hold anything, and claiming otherwise would be a lie on screen.
-static CURRENT_CLIPBOARD_ID: AtomicI64 = AtomicI64::new(0);
-
-/// Records which item is on the clipboard now, and tells the UI so it can mark
-/// the card.
-pub fn set_current_clipboard_id(app: &tauri::AppHandle, id: i64) {
-    if CURRENT_CLIPBOARD_ID.swap(id, Ordering::SeqCst) != id {
-        use tauri::Emitter;
-        let _ = app.emit(model::events::CLIPBOARD_CURRENT, id);
-    }
-}
-
-pub fn current_clipboard_id() -> Option<i64> {
-    match CURRENT_CLIPBOARD_ID.load(Ordering::SeqCst) {
-        0 => None,
-        id => Some(id),
-    }
-}
-
 /// Managed state, resolved by every command through `State<'_, AppState>`.
-pub struct AppState {
-    /// Keeps the non-blocking log writer alive. Dropping it shuts the writer
-    /// down, and every later line is discarded — which reads exactly like the
-    /// app going silent after startup.
-    pub _log_guard: Option<tracing_appender::non_blocking::WorkerGuard>,
-    pub store: Arc<Store>,
-    pub settings: Arc<SettingsStore>,
-    pub clipboard: Arc<ClipboardWatcher>,
-    pub hotkeys: Arc<hotkey::HotkeyManager>,
-}
+/// It is the core itself: the Tauri glue holds nothing of its own.
+pub type AppState = rebuffer_core::api::Core;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -90,131 +50,23 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            use tauri::Emitter;
             let handle = app.handle().clone();
-
-            // Logging comes first. settings.json always lives under the default
-            // root, so its directory is known without reading any settings, and
-            // starting the logger afterwards threw away exactly the messages
-            // worth having: the warning that settings.json was corrupt and was
-            // replaced by defaults went nowhere, so a user whose settings were
-            // silently reset had no way to find out.
-            let settings_path = settings::default_store_root().join("settings.json");
-            let log_guard = logging::init(&settings::default_store_root().join("logs"));
-
-            let settings = Arc::new(SettingsStore::load(&settings_path)?);
-            let resolved = settings.get();
-
-            let store_root = resolved.store_root();
-            if store_root != settings::default_store_root() {
-                tracing::info!(
-                    "store relocated to {}; logs stay under the default root",
-                    store_root.display()
-                );
-            }
-
-            tracing::info!("rebuffer starting, store at {}", store_root.display());
-
-            // A configured store on a removable or network volume will one day
-            // be gone at startup. Failing here would be unrecoverable for the
-            // user: the tray icon never appears, so there is no way to open
-            // settings and correct the path. Fall back to the default root and
-            // say so loudly instead — a running app with an empty history can
-            // be fixed, one that refuses to launch cannot.
-            let (store, store_root) = match Store::open(&store_root) {
-                Ok(s) => (Arc::new(s), store_root),
-                Err(e) => {
-                    let fallback = settings::default_store_root();
-                    tracing::error!(
-                        "store at {} could not be opened ({e}); falling back to {}",
-                        store_root.display(),
-                        fallback.display()
-                    );
-                    let s = Arc::new(Store::open(&fallback)?);
-                    let _ = handle.emit(
-                        model::events::STORE_UNAVAILABLE,
-                        format!("{}", store_root.display()),
-                    );
-                    (s, fallback)
-                }
-            };
-
-            // Granted only now: tauri.conf.json scopes the asset protocol to
-            // the default store, a relocated one lives elsewhere, and doing
-            // this before the open would have widened the scope to the path
-            // that failed rather than the one actually in use — every
-            // thumbnail would then silently fail to load.
-            if let Err(e) = handle
-                .asset_protocol_scope()
-                .allow_directory(&store_root, true)
-            {
-                tracing::warn!(
-                    "could not grant asset access to {}: {e}",
-                    store_root.display()
-                );
-            }
-
-            // Without this the store holds no handle and every event it emits
-            // from a background thread is silently dropped: the thumbnailer's
-            // and the link lookup's "this row changed", and the janitor's
-            // prune and storage-warning notices. Nothing errors — the UI just
-            // never hears, and a card sits on its placeholder until something
-            // unrelated redraws it.
-            store.set_app_handle(handle.clone());
-
-            // The store deliberately does not read settings.json, so without
-            // this it runs on its defaults — 30 days and no size cap — and a
-            // user who set either would never see it take effect.
-            store.set_retention_policy(model::RetentionPolicy {
-                retention_days: resolved.storage.retention_days,
-                max_store_bytes: resolved.storage.max_store_bytes.map(|b| b as i64),
-            });
-            store.set_link_previews(resolved.privacy.link_previews);
-            shell::set_temp_files_days(resolved.storage.temp_files_days);
-
-            let emit_handle = handle.clone();
-            let clipboard = Arc::new(ClipboardWatcher::start(
-                store.clone(),
-                Box::new(move |item| {
-                    use tauri::Emitter;
-                    // A fresh capture IS what is on the clipboard right now.
-                    set_current_clipboard_id(&emit_handle, item.id);
-                    let _ = emit_handle.emit(model::events::ITEM_ADDED, item);
-                }),
-            )?);
+            let host: Arc<dyn host::Host> = Arc::new(tauri_host::TauriHost::new(handle.clone()));
 
             let hotkey_handle = handle.clone();
-            let hotkeys = Arc::new(hotkey::HotkeyManager::new(Box::new(move || {
-                // Never discard this: the hotkey firing but the window not
-                // appearing is the single hardest failure to diagnose from the
-                // outside, because both look like "the hotkey does not work".
-                tracing::info!("hotkey fired");
-                if let Err(e) = window::show_popup(&hotkey_handle) {
-                    tracing::error!("hotkey fired but the popup did not show: {e}");
-                }
-            }))?);
-
-            // HotkeyManager::new only builds the machinery; nothing is
-            // registered until rebind runs, so without this the app starts with
-            // no hotkey at all. A binding the user has made unusable must not
-            // stop the app from starting — fall back to the default and log it,
-            // because a tray app that refuses to launch is unrecoverable
-            // without editing settings.json by hand.
-            let chord = hotkey::Chord::parse(&resolved.hotkey.binding).unwrap_or_else(|e| {
-                tracing::warn!(
-                    "hotkey {:?} is not parseable ({e}), falling back to Alt+V",
-                    resolved.hotkey.binding
-                );
-                hotkey::Chord::parse("Alt+V").expect("the default binding must always parse")
-            });
-            match hotkeys.rebind(&chord, resolved.hotkey.aggressive_mode) {
-                Ok(()) => tracing::info!(
-                    "hotkey {} registered (aggressive: {})",
-                    chord.to_display(),
-                    resolved.hotkey.aggressive_mode
-                ),
-                Err(e) => tracing::error!("could not register hotkey {}: {e}", chord.to_display()),
-            }
+            let core = rebuffer_core::api::Core::start(
+                host,
+                Box::new(move || {
+                    // Never discard this: the hotkey firing but the window not
+                    // appearing is the single hardest failure to diagnose from
+                    // the outside, because both look like "the hotkey does not
+                    // work".
+                    tracing::info!("hotkey fired");
+                    if let Err(e) = window::show_popup(&hotkey_handle) {
+                        tracing::error!("hotkey fired but the popup did not show: {e}");
+                    }
+                }),
+            )?;
 
             // The popup is the only window created up front, and it is the
             // only one worth the resident memory: it is what the hotkey opens
@@ -230,13 +82,7 @@ pub fn run() {
 
             tray::install(&handle)?;
 
-            app.manage(AppState {
-                _log_guard: log_guard,
-                store,
-                settings,
-                clipboard,
-                hotkeys,
-            });
+            app.manage(core);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

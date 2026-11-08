@@ -557,7 +557,15 @@ pub struct SettingsStore {
     /// across all of that, `state` would stall the whole UI on a slow disk.
     /// No reader ever takes this lock.
     writing: Mutex<()>,
+    /// Who hears about an external edit. Shared with the watcher thread;
+    /// `None` until someone attaches.
+    on_reload: Arc<Mutex<Option<Arc<OnReload>>>>,
 }
+
+/// Called by the watcher after it has taken in a hand edit of the file, with
+/// the settings before and after. Runs on the watcher thread, with no lock of
+/// the store held, so it may call `patch`.
+pub type OnReload = dyn Fn(&Settings, &Settings) + Send + Sync;
 
 fn file_mtime(path: &Path) -> Option<SystemTime> {
     fs::metadata(path).and_then(|m| m.modified()).ok()
@@ -624,10 +632,12 @@ impl SettingsStore {
             settings,
             file_mtime: mtime,
         }));
+        let on_reload: Arc<Mutex<Option<Arc<OnReload>>>> = Arc::new(Mutex::new(None));
         let store = SettingsStore {
             path: path.to_path_buf(),
             state: state.clone(),
             writing: Mutex::new(()),
+            on_reload: on_reload.clone(),
         };
 
         // Hot reload: a plain mtime poll, deliberately not a filesystem-watcher
@@ -663,13 +673,31 @@ impl SettingsStore {
             if st.file_mtime != known {
                 continue;
             }
-            if let Some(s) = reloaded {
-                st.settings = s;
-            }
+            let change = reloaded.map(|s| {
+                let before = std::mem::replace(&mut st.settings, s);
+                (before, st.settings.clone())
+            });
             st.file_mtime = current;
+            drop(st);
+            // A hand edit is a settings change like any other: whoever owns
+            // the live OS state has to apply it, and every open window has to
+            // re-sync. Called with the state lock released, so the listener
+            // can `patch` (to roll back a hotkey that will not register) and a
+            // slow one cannot stall `get`.
+            if let Some((before, next)) = change {
+                let listener = on_reload.lock().clone();
+                if let Some(listener) = listener {
+                    listener(&before, &next);
+                }
+            }
         });
 
         Ok(store)
+    }
+
+    /// Attaches the listener that applies external edits of the file.
+    pub fn set_on_reload(&self, listener: Arc<OnReload>) {
+        *self.on_reload.lock() = Some(listener);
     }
 
     pub fn get(&self) -> Settings {
@@ -1410,5 +1438,36 @@ mod tests {
                 "value {v} must map to enabled"
             );
         }
+    }
+
+    /// A hand edit of settings.json must reach whoever applies it, not only
+    /// the Rust state: before the watcher announced reloads, open windows kept
+    /// showing the old values and the live hotkey and retention policy never
+    /// changed.
+    #[test]
+    fn an_external_edit_is_announced_with_before_and_after() {
+        use std::sync::mpsc;
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("settings.json");
+        let store = SettingsStore::load(&path).expect("load");
+        assert!(store.get().appearance.show_age);
+        let (tx, rx) = mpsc::channel::<(Settings, Settings)>();
+        let tx = Mutex::new(tx);
+        store.set_on_reload(Arc::new(move |before: &Settings, next: &Settings| {
+            let _ = tx.lock().send((before.clone(), next.clone()));
+        }));
+
+        let mut on_disk: Value =
+            serde_json::from_slice(&fs::read(&path).expect("file exists")).expect("valid json");
+        on_disk["appearance"]["showAge"] = json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&on_disk).expect("json")).expect("write");
+
+        let (before, next) = rx
+            .recv_timeout(Duration::from_secs(8))
+            .expect("the watcher announces the reload");
+        assert!(before.appearance.show_age);
+        assert!(!next.appearance.show_age);
+        assert!(!store.get().appearance.show_age);
     }
 }

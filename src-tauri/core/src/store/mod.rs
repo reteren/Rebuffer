@@ -20,7 +20,7 @@ use rusqlite::Connection;
 
 use std::collections::HashSet;
 
-use tauri::{AppHandle, Manager};
+use crate::host::{self, Host};
 
 use crate::capture::Capture;
 use crate::error::{AppError, AppResult};
@@ -116,7 +116,8 @@ struct StoreInner {
     root: RwLock<PathBuf>,
     conn: Mutex<Connection>,
     retention_policy: RwLock<RetentionPolicy>,
-    app_handle: Mutex<Option<AppHandle>>,
+    /// Whoever draws the interface; `None` until one attaches.
+    host: Mutex<Option<Arc<dyn Host>>>,
     thumb_tx: Sender<ThumbnailTask>,
     link_tx: Sender<LinkTask>,
     /// `privacy.linkPreviews`. Pushed in from settings, like the retention
@@ -154,7 +155,7 @@ impl Store {
             root: RwLock::new(root.to_path_buf()),
             conn: Mutex::new(conn),
             retention_policy: RwLock::new(RetentionPolicy::default()),
-            app_handle: Mutex::new(None),
+            host: Mutex::new(None),
             thumb_tx,
             link_tx,
             link_previews: AtomicBool::new(false),
@@ -177,7 +178,6 @@ impl Store {
         thread::Builder::new()
             .name("store-thumbnailer".into())
             .spawn(move || {
-                use tauri::Emitter;
                 while let Ok(task) = thumb_rx.recv() {
                     let written = match &task.source {
                         ThumbSource::Bytes(bytes) => write_thumbnail(&task.root, &task.hash, bytes),
@@ -205,9 +205,9 @@ impl Store {
                             continue;
                         }
                     }
-                    let app = inner.app_handle.lock().clone();
-                    if let Some(app) = app {
-                        let _ = app.emit(crate::model::events::ITEM_UPDATED, vec![task.item_id]);
+                    let host = inner.host.lock().clone();
+                    if let Some(host) = host {
+                        host::emit(&*host, crate::model::events::ITEM_UPDATED, &[task.item_id]);
                     }
                 }
             })
@@ -221,7 +221,6 @@ impl Store {
         thread::Builder::new()
             .name("store-link-preview".into())
             .spawn(move || {
-                use tauri::Emitter;
                 while let Ok(task) = link_rx.recv() {
                     let found = match preview::fetch(&task.url) {
                         Ok(p) => p,
@@ -258,9 +257,9 @@ impl Store {
                             continue;
                         }
                     }
-                    let app = inner.app_handle.lock().clone();
-                    if let Some(app) = app {
-                        let _ = app.emit(crate::model::events::ITEM_UPDATED, vec![task.item_id]);
+                    let host = inner.host.lock().clone();
+                    if let Some(host) = host {
+                        host::emit(&*host, crate::model::events::ITEM_UPDATED, &[task.item_id]);
                     }
                 }
             })
@@ -288,9 +287,9 @@ impl Store {
                 if let Some(inner) = weak_inner.upgrade() {
                     let store = Store { inner };
                     let policy = store.retention_policy();
-                    let app = store.inner.app_handle.lock().clone();
-                    let _ = janitor::run_cleanup_with_app(
-                        app.as_ref(),
+                    let host = store.inner.host.lock().clone();
+                    let _ = janitor::run_cleanup_with_host(
+                        host.as_deref(),
                         &store,
                         Some(policy.retention_days),
                         policy.max_store_bytes,
@@ -347,10 +346,10 @@ impl Store {
         self.inner.link_previews.store(enabled, Ordering::SeqCst);
     }
 
-    /// Attaches the Tauri AppHandle for event emission.
-    pub fn set_app_handle(&self, app: AppHandle) {
-        self.grant_animated_assets(&app);
-        *self.inner.app_handle.lock() = Some(app);
+    /// Attaches the front end that receives the store's events.
+    pub fn set_host(&self, host: Arc<dyn Host>) {
+        self.grant_animated_assets(&*host);
+        *self.inner.host.lock() = Some(host);
     }
 
     /// Lets the WebView read the animated originals that live outside the
@@ -364,7 +363,7 @@ impl Store {
     /// Each such file is allowed individually — not its folder, and nothing
     /// else in it — and only for files the user themselves put into the
     /// history.
-    fn grant_animated_assets(&self, app: &AppHandle) {
+    fn grant_animated_assets(&self, host: &dyn Host) {
         let paths: Vec<String> = {
             let conn = self.inner.conn.lock();
             let Ok(mut stmt) = conn.prepare(
@@ -385,7 +384,7 @@ impl Store {
             }
         };
         for path in paths {
-            self.allow_asset(app, Path::new(&path));
+            self.allow_asset(host, Path::new(&path));
         }
     }
 
@@ -393,7 +392,7 @@ impl Store {
     /// would push the same glob onto the scope's pattern list again on every
     /// capture, so the set is what keeps that list from growing for the life of
     /// the process.
-    fn allow_asset(&self, app: &AppHandle, path: &Path) {
+    fn allow_asset(&self, host: &dyn Host, path: &Path) {
         if !path.is_absolute() {
             return;
         }
@@ -403,9 +402,7 @@ impl Store {
                 return;
             }
         }
-        if let Err(e) = app.asset_protocol_scope().allow_file(path) {
-            tracing::debug!("could not allow {}: {e}", path.display());
-        }
+        host.allow_file(path);
     }
 
     /// Updates the root directory and reopens the database connection (used during relocation).
@@ -464,8 +461,8 @@ impl Store {
                 .ref_path
                 .clone()
                 .or_else(|| cap.files.first().map(|f| f.path.clone()));
-            if let (Some(app), Some(source)) = (self.inner.app_handle.lock().clone(), source) {
-                self.allow_asset(&app, Path::new(&source));
+            if let (Some(host), Some(source)) = (self.inner.host.lock().clone(), source) {
+                self.allow_asset(&*host, Path::new(&source));
             }
         }
 
@@ -775,11 +772,11 @@ impl Store {
         // background worker a capture uses. It must not happen inline: this
         // runs inside a synchronous Tauri command, which is event-loop work,
         // and asking the shell for a video frame there would stall the UI.
-        let app = self.inner.app_handle.lock().clone();
+        let host = self.inner.host.lock().clone();
         for item in &items {
             if item.sub_kind == Some(SubKind::Animated) {
-                if let (Some(app), Some(path)) = (app.as_ref(), item.ref_path.as_deref()) {
-                    self.allow_asset(app, Path::new(path));
+                if let (Some(host), Some(path)) = (host.as_deref(), item.ref_path.as_deref()) {
+                    self.allow_asset(host, Path::new(path));
                 }
             }
             if item.thumb_url.is_some() {
@@ -872,8 +869,8 @@ impl Store {
     pub fn run_cleanup(&self, older_than_days: Option<u32>) -> AppResult<CleanupResult> {
         let policy = self.retention_policy();
         let days = older_than_days.unwrap_or(policy.retention_days);
-        let app = self.inner.app_handle.lock().clone();
-        janitor::run_cleanup_with_app(app.as_ref(), self, Some(days), policy.max_store_bytes)
+        let host = self.inner.host.lock().clone();
+        janitor::run_cleanup_with_host(host.as_deref(), self, Some(days), policy.max_store_bytes)
     }
 }
 

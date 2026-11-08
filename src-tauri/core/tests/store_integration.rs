@@ -1,8 +1,8 @@
 use tempfile::tempdir;
 
-use rebuffer_lib::capture::{Capture, CapturedFile, CapturedFormat};
-use rebuffer_lib::model::{Filter, Kind, Sort, SubKind};
-use rebuffer_lib::store::Store;
+use rebuffer_core::capture::{Capture, CapturedFile, CapturedFormat};
+use rebuffer_core::model::{Filter, Kind, Sort, SubKind};
+use rebuffer_core::store::Store;
 
 fn create_test_png(w: u32, h: u32) -> Vec<u8> {
     let img = image::RgbaImage::new(w, h);
@@ -267,8 +267,8 @@ fn test_blob_refcounting_and_directory_cleanup() {
     let store = Store::open(dir.path()).unwrap();
 
     let data = b"shared blob bytes for refcounting";
-    let hash = rebuffer_lib::store::blobs::compute_hash(data);
-    let blob_rel = rebuffer_lib::store::blobs::blob_rel_path(&hash);
+    let hash = rebuffer_core::store::blobs::compute_hash(data);
+    let blob_rel = rebuffer_core::store::blobs::blob_rel_path(&hash);
     let blob_full = dir.path().join("blobs").join(&blob_rel);
 
     let cap1 = Capture {
@@ -622,7 +622,7 @@ fn test_regression_finding_7_retention_policy_and_size_cap() {
     let store = Store::open(dir.path()).unwrap();
 
     // Set retention policy: 7 days, 500 KB max cap
-    let policy = rebuffer_lib::model::RetentionPolicy {
+    let policy = rebuffer_core::model::RetentionPolicy {
         retention_days: 7,
         max_store_bytes: Some(500 * 1024),
     };

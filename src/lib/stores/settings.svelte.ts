@@ -39,7 +39,7 @@ function applyAppearance(a: Settings['appearance']): void {
   setLanguage(a.language)
 }
 
-/** Mirrors src-tauri/src/settings.rs defaults so the UI renders before the
+/** Mirrors src-tauri/core/src/settings.rs defaults so the UI renders before the
  * first successful get_settings, and so it has sane values if the Rust side
  * is not up yet. */
 export const DEFAULT_SETTINGS: Settings = {

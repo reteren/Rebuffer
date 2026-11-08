@@ -3,7 +3,7 @@
 //! OWNER: worker W3.
 
 pub mod memory;
-pub mod paste;
+pub use rebuffer_core::paste;
 pub mod position;
 pub mod vibrancy;
 

@@ -11,10 +11,10 @@ Write only inside your own paths. Reading anything is fine.
 
 | Worker | Owns |
 |---|---|
-| W1 store | `src-tauri/src/store/**`, `src-tauri/migrations/**` |
-| W2 clipboard | `src-tauri/src/clipboard/**` |
-| W3 window+hotkey | `src-tauri/src/window/**`, `src-tauri/src/hotkey/**` |
-| W4 platform | `src-tauri/src/settings.rs`, `tray.rs`, `logging.rs`, `shell.rs` |
+| W1 store | `src-tauri/core/src/store/**`, `src-tauri/core/migrations/**` |
+| W2 clipboard | `src-tauri/core/src/clipboard/**` |
+| W3 window+hotkey | `src-tauri/src/window/**`, `src-tauri/core/src/hotkey/**` |
+| W4 platform | `src-tauri/core/src/settings.rs`, `logging.rs`, `shell.rs`; `src-tauri/src/tray.rs` |
 | W5 UI kit | `src/lib/components/**`, `src/lib/styles/**`, `src/lib/mock.ts` |
 | W6 wiring | `src/lib/ipc.ts`, `src/lib/stores/**`, `src/routes/**` |
 

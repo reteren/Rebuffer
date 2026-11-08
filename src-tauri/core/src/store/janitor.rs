@@ -8,7 +8,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use tauri::{AppHandle, Emitter};
+use crate::host::{self, Host};
 use walkdir::WalkDir;
 use zip::write::SimpleFileOptions;
 use zip::CompressionMethod;
@@ -297,9 +297,9 @@ fn normalize_rel(rel: &Path) -> String {
     rel.to_string_lossy().replace('\\', "/")
 }
 
-/// Runs the age sweep and size cap pruning with optional AppHandle for events.
-pub fn run_cleanup_with_app(
-    app: Option<&AppHandle>,
+/// Runs the age sweep and size cap pruning, reporting to `host` if there is one.
+pub fn run_cleanup_with_host(
+    host: Option<&dyn Host>,
     store: &Store,
     older_than_days: Option<u32>,
     max_store_bytes: Option<i64>,
@@ -345,8 +345,8 @@ pub fn run_cleanup_with_app(
             // prunes rows out from under an open popup and the cards stay on
             // screen until the next reload — clicking one then copies an item
             // that no longer exists.
-            if let Some(a) = app {
-                let _ = a.emit(events::ITEMS_DELETED, &expired_ids);
+            if let Some(a) = host {
+                host::emit(a, events::ITEMS_DELETED, &expired_ids);
             }
             removed_items += expired_ids.len() as i64;
             freed_bytes += expired_bytes;
@@ -367,10 +367,11 @@ pub fn run_cleanup_with_app(
 
         // Emit 90% warning if used_bytes >= 90% of cap
         if total_bytes >= warn_threshold {
-            if let Some(a) = app {
-                let _ = a.emit(
+            if let Some(a) = host {
+                host::emit(
+                    a,
                     events::STORAGE_WARNING,
-                    StorageWarning {
+                    &StorageWarning {
                         used_bytes: total_bytes,
                         cap_bytes: cap,
                         removed_items: 0,
@@ -416,14 +417,15 @@ pub fn run_cleanup_with_app(
 
                 // Same reason as the age sweep above: the cap can fire while
                 // the popup is open.
-                if let Some(a) = app {
-                    let _ = a.emit(events::ITEMS_DELETED, &prune_ids);
+                if let Some(a) = host {
+                    host::emit(a, events::ITEMS_DELETED, &prune_ids);
                 }
 
-                if let Some(a) = app {
-                    let _ = a.emit(
+                if let Some(a) = host {
+                    host::emit(
+                        a,
                         events::STORAGE_WARNING,
-                        StorageWarning {
+                        &StorageWarning {
                             used_bytes: current_bytes,
                             cap_bytes: cap,
                             removed_items: prune_ids.len() as i64,
@@ -441,27 +443,28 @@ pub fn run_cleanup_with_app(
     })
 }
 
-/// Runs the age sweep and size cap pruning without AppHandle.
+/// Runs the age sweep and size cap pruning without reporting to anyone.
 pub fn run_cleanup(
     store: &Store,
     older_than_days: Option<u32>,
     max_store_bytes: Option<i64>,
 ) -> AppResult<CleanupResult> {
-    run_cleanup_with_app(None, store, older_than_days, max_store_bytes)
+    run_cleanup_with_host(None, store, older_than_days, max_store_bytes)
 }
 
 /// Copies db + blobs to `target`, verifies row count and total bytes, then
 /// removes the old tree. Refuses if the target volume has less free space than
 /// the current store size x 1.2.
-pub fn relocate(app: &AppHandle, store: &Store, target: &Path) -> AppResult<()> {
+pub fn relocate(host: &dyn Host, store: &Store, target: &Path) -> AppResult<()> {
     let source_root = store.root().to_path_buf();
     if source_root == target {
         return Ok(());
     }
 
-    let _ = app.emit(
+    host::emit(
+        host,
         events::STORE_PROGRESS,
-        StoreProgress {
+        &StoreProgress {
             phase: "checking_space".into(),
             done: 0,
             total: 100,
@@ -504,9 +507,10 @@ pub fn relocate(app: &AppHandle, store: &Store, target: &Path) -> AppResult<()> 
     std::fs::create_dir_all(target.join("blobs"))?;
     std::fs::create_dir_all(target.join("blobs").join("thumbs"))?;
 
-    let _ = app.emit(
+    host::emit(
+        host,
         events::STORE_PROGRESS,
-        StoreProgress {
+        &StoreProgress {
             phase: "copying_database".into(),
             done: 10,
             total: 100,
@@ -542,9 +546,10 @@ pub fn relocate(app: &AppHandle, store: &Store, target: &Path) -> AppResult<()> 
 
             if total_files > 0 && copied_files % 50 == 0 {
                 let progress = 10 + ((copied_files * 80) / total_files);
-                let _ = app.emit(
+                host::emit(
+                    host,
                     events::STORE_PROGRESS,
-                    StoreProgress {
+                    &StoreProgress {
                         phase: "copying_blobs".into(),
                         done: progress,
                         total: 100,
@@ -555,9 +560,10 @@ pub fn relocate(app: &AppHandle, store: &Store, target: &Path) -> AppResult<()> 
     }
 
     // Verify target database
-    let _ = app.emit(
+    host::emit(
+        host,
         events::STORE_PROGRESS,
-        StoreProgress {
+        &StoreProgress {
             phase: "verifying".into(),
             done: 95,
             total: 100,
@@ -586,9 +592,10 @@ pub fn relocate(app: &AppHandle, store: &Store, target: &Path) -> AppResult<()> 
     // Delete old tree
     let _ = std::fs::remove_dir_all(&source_root);
 
-    let _ = app.emit(
+    host::emit(
+        host,
         events::STORE_PROGRESS,
-        StoreProgress {
+        &StoreProgress {
             phase: "completed".into(),
             done: 100,
             total: 100,
@@ -644,7 +651,7 @@ struct ExportedItem {
 
 /// Writes a `.rbx` archive: `settings.json`, `manifest.json`, `items.jsonl`,
 /// and the `blobs/` tree.
-pub fn export(app: &AppHandle, store: &Store, target: &Path) -> AppResult<()> {
+pub fn export(host: &dyn Host, store: &Store, target: &Path) -> AppResult<()> {
     let root = store.root().to_path_buf();
     if let Some(parent) = target.parent() {
         std::fs::create_dir_all(parent)?;
@@ -654,9 +661,10 @@ pub fn export(app: &AppHandle, store: &Store, target: &Path) -> AppResult<()> {
     let mut zip = zip::ZipWriter::new(file);
     let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
 
-    let _ = app.emit(
+    host::emit(
+        host,
         events::STORE_PROGRESS,
-        StoreProgress {
+        &StoreProgress {
             phase: "exporting_metadata".into(),
             done: 10,
             total: 100,
@@ -687,9 +695,10 @@ pub fn export(app: &AppHandle, store: &Store, target: &Path) -> AppResult<()> {
     zip.write_all(manifest.to_string().as_bytes())?;
 
     // 3. items.jsonl
-    let _ = app.emit(
+    host::emit(
+        host,
         events::STORE_PROGRESS,
-        StoreProgress {
+        &StoreProgress {
             phase: "exporting_items".into(),
             done: 20,
             total: 100,
@@ -835,9 +844,10 @@ pub fn export(app: &AppHandle, store: &Store, target: &Path) -> AppResult<()> {
 
             if total_blobs > 0 && written_blobs % 20 == 0 {
                 let progress = 30 + ((written_blobs * 65) / total_blobs);
-                let _ = app.emit(
+                host::emit(
+                    host,
                     events::STORE_PROGRESS,
-                    StoreProgress {
+                    &StoreProgress {
                         phase: "exporting_blobs".into(),
                         done: progress,
                         total: 100,
@@ -849,9 +859,10 @@ pub fn export(app: &AppHandle, store: &Store, target: &Path) -> AppResult<()> {
 
     zip.finish().map_err(|e| AppError::Other(e.to_string()))?;
 
-    let _ = app.emit(
+    host::emit(
+        host,
         events::STORE_PROGRESS,
-        StoreProgress {
+        &StoreProgress {
             phase: "completed".into(),
             done: 100,
             total: 100,
@@ -862,14 +873,15 @@ pub fn export(app: &AppHandle, store: &Store, target: &Path) -> AppResult<()> {
 }
 
 /// Imports items and blobs from a `.rbx` archive in either Merge or Replace mode.
-pub fn import(app: &AppHandle, store: &Store, archive: &Path, mode: ImportMode) -> AppResult<()> {
+pub fn import(host: &dyn Host, store: &Store, archive: &Path, mode: ImportMode) -> AppResult<()> {
     let root = store.root().to_path_buf();
     let file = std::fs::File::open(archive)?;
     let mut zip = zip::ZipArchive::new(file).map_err(|e| AppError::Other(e.to_string()))?;
 
-    let _ = app.emit(
+    host::emit(
+        host,
         events::STORE_PROGRESS,
-        StoreProgress {
+        &StoreProgress {
             phase: "extracting_blobs".into(),
             done: 10,
             total: 100,
@@ -900,9 +912,10 @@ pub fn import(app: &AppHandle, store: &Store, archive: &Path, mode: ImportMode) 
 
         if total_entries > 0 && i % 20 == 0 {
             let progress = 10 + ((i as u64 * 50) / total_entries as u64);
-            let _ = app.emit(
+            host::emit(
+                host,
                 events::STORE_PROGRESS,
-                StoreProgress {
+                &StoreProgress {
                     phase: "extracting_blobs".into(),
                     done: progress,
                     total: 100,
@@ -912,9 +925,10 @@ pub fn import(app: &AppHandle, store: &Store, archive: &Path, mode: ImportMode) 
     }
 
     // 2. Read and import items.jsonl
-    let _ = app.emit(
+    host::emit(
+        host,
         events::STORE_PROGRESS,
-        StoreProgress {
+        &StoreProgress {
             phase: "importing_items".into(),
             done: 65,
             total: 100,
@@ -1017,9 +1031,10 @@ pub fn import(app: &AppHandle, store: &Store, archive: &Path, mode: ImportMode) 
         }
     }
 
-    let _ = app.emit(
+    host::emit(
+        host,
         events::STORE_PROGRESS,
-        StoreProgress {
+        &StoreProgress {
             phase: "completed".into(),
             done: 100,
             total: 100,

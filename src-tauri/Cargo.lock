@@ -3787,14 +3787,9 @@ checksum = "03251193000f4bd3b042892be858ee50e8b3719f2b08e5833ac4353724632430"
 name = "rebuffer"
 version = "1.1.11"
 dependencies = [
- "anyhow",
  "arboard",
- "blake3",
- "dirs 6.0.0",
  "image",
- "once_cell",
- "parking_lot",
- "rusqlite",
+ "rebuffer-core",
  "serde",
  "serde_json",
  "tauri",
@@ -3805,6 +3800,26 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+ "tracing",
+ "tracing-appender",
+ "urlencoding",
+ "window-vibrancy 0.8.0",
+ "windows",
+]
+
+[[package]]
+name = "rebuffer-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "blake3",
+ "dirs 6.0.0",
+ "image",
+ "once_cell",
+ "parking_lot",
+ "rusqlite",
+ "serde",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.20",
  "tracing",
@@ -3814,7 +3829,6 @@ dependencies = [
  "urlencoding",
  "walkdir",
  "webp",
- "window-vibrancy 0.8.0",
  "windows",
  "windows-core 0.61.2",
  "zip",

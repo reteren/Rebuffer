@@ -1,4 +1,4 @@
-// Mirror of src-tauri/src/model.rs and settings.rs. Change one, change both.
+// Mirror of src-tauri/core/src/model.rs and settings.rs. Change one, change both.
 // Serde is configured camelCase, so field names match exactly.
 
 /// Selectable themes. 'darkblue' is the built-in one defined on :root; every other
