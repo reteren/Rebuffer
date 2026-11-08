@@ -1,0 +1,16 @@
+# UI framework spikes for the native front end (roadmap phase 1).
+#
+# A workspace of its own, deliberately outside src-tauri: the spikes pull in
+# whole UI toolkits, and none of that belongs in the app's Cargo.lock or in CI
+# until one of them has won. Each spike renders the same popup from the same
+# data so the numbers compare.
+[workspace]
+resolver = "2"
+members = ["common", "slint-popup", "gpui-popup"]
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

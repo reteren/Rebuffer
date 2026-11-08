@@ -1,0 +1,10 @@
+[package]
+name = "slint-popup"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+spike-common = { path = "../common" }
+slint = { version = "1.18.1", features = ["raw-window-handle-06"] }
+window-vibrancy = "0.8.0"

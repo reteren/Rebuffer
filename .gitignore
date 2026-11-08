@@ -8,6 +8,7 @@ vite.config.ts.timestamp-*
 
 # Verification scratch scripts are worth keeping; their build output is not.
 scripts/**/target/
+spikes/target/
 
 # Local agent/editor state. Never belongs in the published history.
 .claude/
