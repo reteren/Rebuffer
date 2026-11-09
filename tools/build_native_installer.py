@@ -29,7 +29,13 @@ ROOT = Path(__file__).resolve().parent.parent
 TAURI = ROOT / "src-tauri"
 NATIVE = TAURI / "native"
 TEMPLATE_DIR = NATIVE / "installer"
+# The NSIS the Tauri CLI downloads, unless overridden: CI points NSIS_DIR at a
+# system NSIS and NSIS_PLUGIN_DIR at the nsis_tauri_utils plugin it fetched.
 NSIS_HOME = Path(os.environ.get("LOCALAPPDATA", "")) / "tauri" / "NSIS"
+NSIS_DIR = Path(os.environ.get("NSIS_DIR", NSIS_HOME))
+NSIS_PLUGIN_DIR = Path(
+    os.environ.get("NSIS_PLUGIN_DIR", NSIS_HOME / "Plugins" / "x86-unicode" / "additional")
+)
 
 
 def shipping_version() -> str:
@@ -106,10 +112,13 @@ def main() -> None:
     for name in ("utils.nsh", "FileAssociation.nsh", "English.nsh"):
         shutil.copy2(TEMPLATE_DIR / name, stage / name)
 
-    makensis = NSIS_HOME / "makensis.exe"
-    plugins = NSIS_HOME / "Plugins" / "x86-unicode" / "additional"
+    makensis = NSIS_DIR / "makensis.exe"
+    plugins = NSIS_PLUGIN_DIR
     if not makensis.exists() or not (plugins / "nsis_tauri_utils.dll").exists():
-        sys.exit(f"NSIS from the Tauri CLI not found under {NSIS_HOME}; run `npx tauri build` once")
+        sys.exit(
+            f"makensis or nsis_tauri_utils.dll missing ({makensis}, {plugins}); "
+            "run `npx tauri build` once, or set NSIS_DIR and NSIS_PLUGIN_DIR"
+        )
 
     values = {
         "compression": "lzma",
