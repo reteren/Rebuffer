@@ -10,6 +10,29 @@ This document records the baseline persistence performance metrics for the Rebuf
 - **Storage Subsystem**: NVMe SSD / NTFS (temp directory via `tempfile`)
 - **Dataset Size**: 10,000 items (mix of plain text, rich text, images, multi-file collections, and references)
 
+## Native front end vs WebView (2026-11-09)
+
+Same machine, same live store (~2 087 items, 1.05 GB), release builds, no
+input sent to either app. Method as below: spawn, poll the app's own log for
+its last startup line (`hotkey Alt+V registered` for the WebView build,
+`native front end ready` for the native one), subtract; then 8 s settle and
+10 s of idle. Memory is private bytes of the whole process tree, which for the
+WebView build includes its WebView2 processes. Three runs each.
+
+| Metric | WebView build (1.1.11, installed) | Native build (Slint, software renderer) |
+|---|---|---|
+| Cold start to tray-ready | 599–624 ms (one run missed the log line) | **355–380 ms** |
+| Idle memory, popup hidden | 313–352 MB over 7–8 processes | **12.6–14.3 MB, one process** |
+| Idle CPU | 0 % | 0 % |
+| Hotkey → popup shown (from the app's log) | 4.1 ms median (debug, below) | 17–22 ms (release) |
+| Popup open on 2 000 items | n/a | 26–27 MB |
+
+The native hotkey figure is the gap between the `hotkey fired` and
+`popup shown` log lines and includes placing the window, reloading the history
+if it changed while hidden, and taking the foreground; the WebView figure was
+measured to the window becoming visible with a pre-built WebView, so the two
+are not the same interval. Neither is near the 80 ms target.
+
 ## Runtime numbers (SPEC §10)
 
 Measured on **DESKTOP-0MFACBN** (AMD Ryzen 7 7800X3D, 16 logical cores, Windows 11,
