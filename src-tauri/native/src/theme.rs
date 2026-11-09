@@ -112,7 +112,37 @@ where
         theme.set_accent(c);
     }
     let window = over(theme.get_bg_1(), theme.get_bg_0());
+    theme.set_window_base(window);
+    set_controls(&theme, css_of(name).contains("color-scheme: light"));
     theme.set_card_corner(over(theme.get_surface_1(), window));
+}
+
+/// The colors Chromium paints a checkbox or radio in, with `accent-color` set
+/// to the accent: the WebView front end used the stock controls. The mark on
+/// a checked box, and the ring inside a checked radio, is whichever of light
+/// or dark reads on the accent.
+fn set_controls(theme: &Theme<'_>, light: bool) {
+    let (fill, border) = if light {
+        (
+            Color::from_rgb_u8(0xff, 0xff, 0xff),
+            Color::from_rgb_u8(0x76, 0x76, 0x76),
+        )
+    } else {
+        (
+            Color::from_rgb_u8(0x3b, 0x3b, 0x3b),
+            Color::from_rgb_u8(0x85, 0x85, 0x85),
+        )
+    };
+    theme.set_control_fill(fill);
+    theme.set_control_border(border);
+    let a = theme.get_accent();
+    let luma =
+        0.2126 * f32::from(a.red()) + 0.7152 * f32::from(a.green()) + 0.0722 * f32::from(a.blue());
+    theme.set_control_mark(if luma > 140.0 {
+        Color::from_rgb_u8(0x3b, 0x3b, 0x3b)
+    } else {
+        Color::from_rgb_u8(0xff, 0xff, 0xff)
+    });
 }
 
 /// `top` composited over an opaque `bottom` (source-over).

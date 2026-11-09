@@ -27,7 +27,8 @@ use std::sync::Arc;
 
 use rebuffer_core::api::Core;
 
-/// `--snapshot <png> [--theme <name>] [--lang <code>]`: render the popup to a
+/// `--snapshot <png> [--theme <name>] [--lang <code>] [--window settings]
+/// [--section <n>]`: render the popup to a
 /// PNG and exit, without activating any window. For checking the interface
 /// without taking focus from whatever the user is doing; the overrides are
 /// not saved.
@@ -37,7 +38,7 @@ pub struct Snapshot {
     pub lang: Option<String>,
     /// `settings` for the settings window; the popup otherwise.
     pub window: Option<String>,
-    /// Settings section to open, 0-5.
+    /// Settings section to open, 0-5; for the popup, the tab.
     pub section: i32,
 }
 

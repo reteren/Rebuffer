@@ -28,6 +28,8 @@ export struct CardData {
     // 0..6, one of Theme.ext-1..7: the file icon's color.
     ext-color: int,
     age: string,
+    // A file card holding more than one file: a second sheet behind the icon.
+    multi: bool,
     pinned: bool,
     missing: bool,
     current: bool,
@@ -160,6 +162,16 @@ component Card inherits Rectangle {
         background: Theme.accent;
         drop-shadow-color: Theme.accent;
         drop-shadow-blur: 10px;
+        // A ring, not a fill: the card's surface is translucent, so put the
+        // window back under it before the body paints.
+        Rectangle {
+            x: 2px;
+            y: 2px;
+            width: parent.width - 4px;
+            height: parent.height - 4px;
+            border-radius: 10px;
+            background: Theme.window-base;
+        }
     }
 
     body := Rectangle {
@@ -279,7 +291,9 @@ component Card inherits Rectangle {
                 x: 10px;
                 y: 9px;
                 width: parent.width - 20px;
-                height: min(parent.height - 18px, Layout.text-size * 1.42 * 7);
+                height: min(parent.height - 18px, Layout.text-size * 1.44 * 7 + 1px);
+                // line-height 1.42; the font's own line is about 1.31em.
+                line-height-factor: 1.08;
                 text: root.data.text;
                 color: root.data.kind == "code" ? Theme.text-1 : Theme.text-2;
                 font-size: Layout.text-size;
@@ -299,6 +313,20 @@ component Card inherits Rectangle {
                     width: 32px;
                     height: 32px;
                     opacity: 0.92;
+                    // .doc-back: the same sheet, 4px down-left, at 35%.
+                    if root.data.multi: Path {
+                        x: -4px;
+                        y: 4px;
+                        width: 32px;
+                        height: 32px;
+                        viewbox-width: 24;
+                        viewbox-height: 24;
+                        commands: "M6 3.5h8l4 4v13H6z M14 3.5v4h4";
+                        stroke: Layout.ext(root.data.ext-color);
+                        stroke-width: 1.4px;
+                        fill: transparent;
+                        opacity: 0.35;
+                    }
                     Path {
                         width: 32px;
                         height: 32px;

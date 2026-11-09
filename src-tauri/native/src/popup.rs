@@ -205,6 +205,7 @@ impl Rows {
             } else {
                 SharedString::new()
             },
+            multi: item.kind == Kind::File && item.file_names.len() > 1,
             pinned: item.pinned,
             missing: item.missing,
             current: rebuffer_core::current_clipboard_id() == Some(item.id),
@@ -451,6 +452,11 @@ pub fn snapshot(spec: crate::Snapshot) {
         }
         if let Some(lang) = &spec.lang {
             crate::i18n::apply(&p.ui, lang);
+        }
+        {
+            let mut v = p.view.borrow_mut();
+            v.tab = (spec.section.max(0) as usize).min(TABS.len() - 1);
+            v.filter = tab_filter(v.tab);
         }
         p.reload(false);
         // The newest item stands in for "what the clipboard holds", as the
@@ -1468,11 +1474,15 @@ fn face(item: &ItemDto) -> Face {
             label: "COLOR".into(),
             domain: None,
         },
-        (Kind::Text, Some(SubKind::Code)) => plain_face("code", preview, "CODE".into()),
+        // A copy out of a terminal can open with a screenful of padding; the
+        // card shows the text, not the blank run that wraps it out of view.
+        (Kind::Text, Some(SubKind::Code)) => {
+            plain_face("code", preview.trim_start().to_string(), "CODE".into())
+        }
         (Kind::Text, _) => {
             let text = match item.title.as_deref() {
                 Some(t) if !t.is_empty() => t.to_string(),
-                _ => preview,
+                _ => preview.trim_start().to_string(),
             };
             plain_face("text", text, ext_label)
         }

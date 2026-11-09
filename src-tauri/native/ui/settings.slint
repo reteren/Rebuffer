@@ -92,6 +92,8 @@ global Look {
 component Hint inherits Text {
     color: Theme.text-2;
     font-size: 12px;
+    // line-height 1.45 = 17.4px; Segoe UI Variable's natural line is 16px.
+    line-height-factor: 1.09;
     wrap: word-wrap;
     horizontal-alignment: I18n.rtl ? right : left;
 }
@@ -152,18 +154,21 @@ component CheckBox inherits Rectangle {
     width: 13px;
     height: 13px;
     border-radius: 2.5px;
-    background: root.checked ? Theme.accent : #ffffff0f;
+    background: root.checked ? Theme.accent : Theme.control-fill;
     border-width: root.checked ? 0 : 1px;
-    border-color: Theme.text-3;
+    border-color: Theme.control-border;
     opacity: root.enabled ? 1 : 0.45;
     if root.checked: Path {
-        width: 9px;
-        height: 9px;
-        viewbox-width: 12;
-        viewbox-height: 12;
-        commands: "M2 6.5l2.6 2.6L10 3.4";
-        stroke: #ffffff;
-        stroke-width: 1.6px;
+        x: 0;
+        y: 0;
+        width: 13px;
+        height: 13px;
+        viewbox-width: 13;
+        viewbox-height: 13;
+        // Chromium's mark: from (3, 6.6) down to (5.6, 9.4), up to (10.2, 3.6).
+        commands: "M3 6.6L5.6 9.4L10.2 3.6";
+        stroke: Theme.control-mark;
+        stroke-width: 2px;
         fill: transparent;
     }
 }
@@ -175,7 +180,7 @@ component Toggle inherits VerticalLayout {
     in property <bool> checked;
     in property <bool> enabled: true;
     callback toggled(bool);
-    spacing: 6px;
+    spacing: 4px;
     HorizontalLayout {
         spacing: 8px;
         alignment: I18n.rtl ? end : start;
@@ -225,14 +230,21 @@ component Radio inherits HorizontalLayout {
             width: 13px;
             height: 13px;
             border-radius: 6.5px;
-            background: root.checked ? Theme.accent : #ffffff0f;
+            // Checked: an accent ring, a gap in the mark color, an accent dot.
+            background: root.checked ? Theme.accent : Theme.control-fill;
             border-width: root.checked ? 0 : 1px;
-            border-color: Theme.text-3;
+            border-color: Theme.control-border;
             if root.checked: Rectangle {
-                width: 5px;
-                height: 5px;
-                border-radius: 2.5px;
-                background: Theme.on-accent;
+                width: 11px;
+                height: 11px;
+                border-radius: 5.5px;
+                background: Theme.control-mark;
+                Rectangle {
+                    width: 7px;
+                    height: 7px;
+                    border-radius: 3.5px;
+                    background: Theme.accent;
+                }
             }
         }
     }
@@ -445,9 +457,12 @@ component Select inherits Rectangle {
 component Field inherits VerticalLayout {
     in property <string> title;
     in property <bool> wrapped;
-    spacing: root.wrapped ? 8px : 6px;
-    if root.title != "": FieldLabel {
-        text: root.title;
+    spacing: 6px;
+    if root.title != "": VerticalLayout {
+        padding-bottom: root.wrapped ? 2px : 0;
+        FieldLabel {
+            text: root.title;
+        }
     }
     @children
 }

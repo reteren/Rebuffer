@@ -40,6 +40,13 @@ export global Theme {
     // bg-0, composited in Rust (theme.rs). The software renderer clips to
     // rectangles only, so cards mask their corners with this color.
     in-out property <color> card-corner: #1d1f27;
+    // bg-1 over bg-0: the window's own opaque color, under a card's
+    // translucent surface where something else would otherwise show through.
+    in-out property <color> window-base: #0f1116;
+    // The stock checkbox and radio, as Chromium drew them (theme.rs).
+    in-out property <color> control-fill: #3b3b3b;
+    in-out property <color> control-border: #858585;
+    in-out property <color> control-mark: #3b3b3b;
 }
 
 export global I18n {
