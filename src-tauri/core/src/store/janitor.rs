@@ -98,6 +98,8 @@ fn get_free_disk_space(_path: &Path) -> Option<u64> {
 /// is ~200–300 ms at 10,000 items on this machine (~100 ms on typical
 /// hardware) — not worth the race.
 pub fn startup_sweep(store: &Store) -> AppResult<()> {
+    purge_orphan_rows(&store.conn())?;
+
     let root = store.root().to_path_buf();
     let blobs_dir = root.join("blobs");
 
@@ -1044,10 +1046,79 @@ pub fn import(host: &dyn Host, store: &Store, archive: &Path, mode: ImportMode) 
     Ok(())
 }
 
+/// Removes `item_files` and `item_formats` rows whose item is gone.
+///
+/// The schema cascades those deletes and every connection turns foreign keys
+/// on, yet a live store carried 1,030 such rows (and one format row) from 500
+/// long-deleted items — the remains of a 10,000-item benchmark set deleted on
+/// a connection without the pragma. They cost little, but an item id that
+/// came back would inherit someone else's files, so they go at startup. Runs
+/// before the blob walk, so a format blob left without a row is swept as an
+/// orphan file in the same pass.
+fn purge_orphan_rows(conn: &rusqlite::Connection) -> AppResult<()> {
+    let files = conn.execute(
+        "DELETE FROM item_files WHERE item_id NOT IN (SELECT id FROM items)",
+        [],
+    )?;
+    let formats = conn.execute(
+        "DELETE FROM item_formats WHERE item_id NOT IN (SELECT id FROM items)",
+        [],
+    )?;
+    if files + formats > 0 {
+        tracing::info!(
+            "startup sweep: removed {files} file and {formats} format row(s) of deleted items"
+        );
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::time::Instant;
+
+    #[test]
+    fn rows_of_deleted_items_are_purged_at_startup() {
+        let dir = tempdir().unwrap();
+        let live_id = {
+            let store = Store::open(dir.path()).unwrap();
+            let live = store
+                .insert_capture(crate::capture::Capture::text("live"))
+                .unwrap();
+            let conn = store.conn();
+            // Orphans the way the live store had them: written with foreign
+            // keys off, pointing at an item that does not exist.
+            conn.execute_batch("PRAGMA foreign_keys = OFF;").unwrap();
+            conn.execute(
+                "INSERT INTO item_files (item_id, path, file_name, position) VALUES (999999, 'gone.txt', 'gone.txt', 0)",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO item_files (item_id, path, file_name, position) VALUES (?1, 'kept.txt', 'kept.txt', 0)",
+                [live.id],
+            )
+            .unwrap();
+            live.id
+        };
+
+        let store = Store::open(dir.path()).unwrap();
+        let rows: Vec<i64> = {
+            let conn = store.conn();
+            let mut stmt = conn.prepare("SELECT item_id FROM item_files").unwrap();
+            let ids = stmt
+                .query_map([], |r| r.get(0))
+                .unwrap()
+                .map(|r| r.unwrap())
+                .collect();
+            ids
+        };
+        assert_eq!(
+            rows,
+            vec![live_id],
+            "only the live item's file row survives"
+        );
+    }
     use tempfile::tempdir;
 
     #[test]
