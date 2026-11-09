@@ -10,18 +10,20 @@ use slint::{Color, ComponentHandle};
 
 use crate::ui::{Theme, ThemeSwatch};
 
+// In the order of the WebView's THEMES list (types.ts), which the settings
+// strip shows.
 const FILES: &[(&str, &str)] = &[
     ("darkblue", include_str!("../themes/darkblue.css")),
     ("black", include_str!("../themes/black.css")),
+    ("light", include_str!("../themes/light.css")),
+    ("grey", include_str!("../themes/grey.css")),
+    ("skyblue", include_str!("../themes/skyblue.css")),
     ("dark-green", include_str!("../themes/dark-green.css")),
     ("dark-purple", include_str!("../themes/dark-purple.css")),
     ("ember", include_str!("../themes/ember.css")),
-    ("grey", include_str!("../themes/grey.css")),
-    ("light", include_str!("../themes/light.css")),
     ("ocean", include_str!("../themes/ocean.css")),
-    ("paper", include_str!("../themes/paper.css")),
-    ("skyblue", include_str!("../themes/skyblue.css")),
     ("wine", include_str!("../themes/wine.css")),
+    ("paper", include_str!("../themes/paper.css")),
 ];
 
 /// Every `--token: <color>` in `css`, in file order.
@@ -109,6 +111,19 @@ where
     if let Some(c) = parse_color(accent.trim()) {
         theme.set_accent(c);
     }
+    let window = over(theme.get_bg_1(), theme.get_bg_0());
+    theme.set_card_corner(over(theme.get_surface_1(), window));
+}
+
+/// `top` composited over an opaque `bottom` (source-over).
+fn over(top: Color, bottom: Color) -> Color {
+    let a = f32::from(top.alpha()) / 255.0;
+    let mix = |t: u8, b: u8| (f32::from(t) * a + f32::from(b) * (1.0 - a)).round() as u8;
+    Color::from_rgb_u8(
+        mix(top.red(), bottom.red()),
+        mix(top.green(), bottom.green()),
+        mix(top.blue(), bottom.blue()),
+    )
 }
 
 /// The accent a theme brings, for the settings window's color row.
@@ -136,7 +151,11 @@ pub fn swatches(label: impl Fn(&str) -> String) -> Vec<ThemeSwatch> {
                 name: (*name).into(),
                 label: label(name).into(),
                 bg: get("bg-0"),
-                surface: get("surface-2"),
+                frame: get("bg-1"),
+                frame_border: get("window-border"),
+                surface: get("surface-1"),
+                surface_2: get("surface-2"),
+                border: get("border-1"),
                 accent: get("accent"),
                 text: get("text-1"),
             }

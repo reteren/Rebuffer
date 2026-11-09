@@ -38,6 +38,8 @@ const PAD: f32 = 16.0;
 const HEADER_H: f32 = 32.0;
 /// The ListView's scrollbar, kept clear of the last column.
 const SCROLLBAR: f32 = 12.0;
+/// .grid-viewport's left and right padding.
+const VIEWPORT_SIDE: f32 = 12.0;
 
 /// The tabs, in display order; each is also its locale key under `tabs.`.
 const TABS: [&str; 7] = [
@@ -134,6 +136,7 @@ impl Model for Rows {
         Some(match spec {
             Row::Header(label) => RowData {
                 header: label.into(),
+                first: row == 0,
                 cards: ModelRc::default(),
             },
             Row::Cards(range) => {
@@ -148,6 +151,7 @@ impl Model for Rows {
                 }
                 RowData {
                     header: SharedString::new(),
+                    first: row == 0,
                     cards: ModelRc::new(VecModel::from(cards)),
                 }
             }
@@ -449,6 +453,12 @@ pub fn snapshot(spec: crate::Snapshot) {
             crate::i18n::apply(&p.ui, lang);
         }
         p.reload(false);
+        // The newest item stands in for "what the clipboard holds", as the
+        // reference page does, so the in-buffer ring is in the picture too.
+        let first = p.view.borrow().items.first().map(|i| i.id);
+        if let Some(id) = first {
+            rebuffer_core::set_current_clipboard_id(p.core.host(), id);
+        }
         let window = p.ui.window();
         window.set_size(slint::LogicalSize::new(1000.0, 680.0));
         if let Err(e) = p.ui.show() {
@@ -640,10 +650,11 @@ impl Popup {
 
         let layout = self.ui.global::<Layout>();
         let (show_label, label_size) = match s.appearance.format_label_size.as_str() {
-            "off" => (false, 9.0),
-            "small" => (true, 8.5),
-            "large" => (true, 13.0),
-            _ => (true, 10.0),
+            // --fs-2xs, --fs-sm, --fs-lg, as Card.svelte picks them.
+            "off" => (false, 10.0),
+            "small" => (true, 10.0),
+            "large" => (true, 15.0),
+            _ => (true, 12.0),
         };
         layout.set_show_label(show_label);
         layout.set_label_size(label_size);
@@ -654,6 +665,8 @@ impl Popup {
         self.rows.clock.set(clock_mode(&s.appearance.time_format));
 
         let options: Vec<SharedString> = SORTS.iter().map(|(_, k)| tr(k).into()).collect();
+        self.ui
+            .set_sort_widest(longest(options.iter().map(|o| o.to_string())).into());
         self.ui
             .set_sort_options(ModelRc::new(VecModel::from(options)));
         self.apply_zoom(s.window.zoom_step);
@@ -782,7 +795,7 @@ impl Popup {
                     index: i as i32,
                     label: tr(&format!("tabs.{key}")).into(),
                     count: if n > 0 {
-                        n.to_string().into()
+                        group_thousands(n).into()
                     } else {
                         SharedString::new()
                     },
@@ -803,8 +816,8 @@ impl Popup {
             tr_with(
                 "status.items",
                 &[
-                    ("count", &counts.all.to_string()),
-                    ("size", &fmt_bytes(total)),
+                    ("count", &group_thousands(counts.all)),
+                    ("size", &status_bytes(total)),
                 ],
             )
             .into(),
@@ -899,13 +912,22 @@ impl Popup {
             .iter()
             .find(|e| e.checked)
             .map(|e| e.label.to_string())
-            .unwrap_or_else(|| tr("toolbar.filter"));
+            .unwrap_or_else(|| tr("toolbar.filterAll"));
         let label = if current == "all" {
-            tr("toolbar.filter")
+            tr("toolbar.filterAll")
         } else {
             label
         };
         self.ui.set_filter_label(label.into());
+        self.ui.set_filter_widest(
+            longest(
+                entries
+                    .iter()
+                    .filter(|e| !e.header)
+                    .map(|e| e.label.to_string()),
+            )
+            .into(),
+        );
         self.ui
             .set_filter_entries(ModelRc::new(VecModel::from(entries)));
     }
@@ -917,7 +939,9 @@ impl Popup {
         let width = window.size().to_logical(window.scale_factor()).width;
         let zoom = self.view.borrow().zoom;
         let pitch = TILE_W[(zoom - 1) as usize] + GAP;
-        let inner = width - PAD * 2.0 - SCROLLBAR + GAP;
+        // Grid.svelte: the viewport's 12px sides, the scrollbar, then
+        // --grid-pad on both sides of the cards.
+        let inner = width - VIEWPORT_SIDE * 2.0 - SCROLLBAR - PAD * 2.0 + GAP;
         let columns = ((inner / pitch).floor() as usize).max(1);
         if self.view.borrow().columns != columns {
             self.view.borrow_mut().columns = columns;
@@ -1125,7 +1149,8 @@ impl Popup {
                 Row::Header(_) => HEADER_H,
                 Row::Cards(_) => tile_h + GAP,
             };
-            let top: f32 = v.rows[..row].iter().map(height).sum();
+            // The first row also carries the grid's top padding.
+            let top: f32 = PAD + v.rows[..row].iter().map(height).sum::<f32>();
             (top, top + height(&v.rows[row]))
         };
         let view_h = self.ui.get_list_height();
@@ -1363,6 +1388,11 @@ impl Popup {
     }
 }
 
+/// The longest of some labels, by characters: what sizes a <select>-like box.
+fn longest(labels: impl Iterator<Item = String>) -> String {
+    labels.max_by_key(|l| l.chars().count()).unwrap_or_default()
+}
+
 fn same_filter(a: &Filter, b: &Filter) -> bool {
     a.kind == b.kind
         && a.ext == b.ext
@@ -1597,6 +1627,42 @@ fn day_label(created_ms: i64) -> String {
     day.format_localized(fmt, chrono_locale()).to_string()
 }
 
+/// `1,234,567` — counts as the WebView showed them (`toLocaleString('en-US')`).
+fn group_thousands(n: i64) -> String {
+    let digits = n.unsigned_abs().to_string();
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    if n < 0 {
+        out.insert(0, '-');
+    }
+    out
+}
+
+/// The status bar's own size format (StatusBar.svelte): one decimal under
+/// 100 units, none above.
+fn status_bytes(n: i64) -> String {
+    if n < 1024 {
+        return format!("{} B", n.max(0));
+    }
+    let units = ["KB", "MB", "GB", "TB"];
+    let mut v = n as f64 / 1024.0;
+    let mut u = 0;
+    while v >= 1024.0 && u < units.len() - 1 {
+        v /= 1024.0;
+        u += 1;
+    }
+    if v >= 100.0 {
+        format!("{} {}", v.round(), units[u])
+    } else {
+        format!("{v:.1} {}", units[u])
+    }
+}
+
 pub(crate) fn fmt_bytes(n: i64) -> String {
     if n < 1024 {
         return format!("{n} B");
@@ -1640,6 +1706,15 @@ mod tests {
             Some("host")
         );
         assert_eq!(domain_of("not a url"), None);
+    }
+
+    #[test]
+    fn counts_and_status_sizes_read_like_the_webview_ones() {
+        assert_eq!(group_thousands(2074), "2,074");
+        assert_eq!(group_thousands(999), "999");
+        assert_eq!(group_thousands(1_234_567), "1,234,567");
+        assert_eq!(status_bytes(1_127_000_000), "1.0 GB");
+        assert_eq!(status_bytes(150 * 1024 * 1024), "150 MB");
     }
 
     #[test]

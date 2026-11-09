@@ -1,8 +1,12 @@
-// The settings window, ported from src/routes/Settings.svelte. Every control
-// reports a change through a callback; native/src/settings.rs turns it into a
-// settings patch through the core, and the settings-changed that comes back
-// refreshes `data`. Nothing here holds state of its own except what is
-// purely visual (which section is open, a pending confirmation).
+// The settings window, ported from src/routes/Settings.svelte with its
+// NumberField, ThemePreview and LanguagePicker components. Every size, radius,
+// padding and color is the WebView front end's CSS at commit d9b5c91; where a
+// value is not a token, the comment names the rule it came from.
+//
+// Every control reports a change through a callback; native/src/settings.rs
+// turns it into a settings patch through the core, and the settings-changed
+// that comes back refreshes `data`. Nothing here holds state of its own except
+// what is purely visual (which section is open, a pending confirmation).
 
 import { ScrollView, AboutSlint } from "std-widgets.slint";
 import { Theme, I18n } from "globals.slint";
@@ -44,11 +48,16 @@ export struct SettingsData {
     blocked: [string],
 }
 
+// Everything ThemePreview.svelte paints, in that theme's own colors.
 export struct ThemeSwatch {
     name: string,
     label: string,
     bg: color,
+    frame: color,
+    frame-border: color,
     surface: color,
+    surface-2: color,
+    border: color,
     accent: color,
     text: color,
 }
@@ -64,43 +73,68 @@ export struct AccentPreset {
 }
 
 export struct UsageSeg {
+    // Where the segment begins on the meter, as a fraction of it.
+    start: float,
     fraction: float,
     color: color,
     label: string,
 }
 
-component Hint inherits Text {
-    color: Theme.text-3;
-    font-size: 11px;
-    wrap: word-wrap;
-    horizontal-alignment: I18n.rtl ? right : left;
+// --hover: the overlay the window shells use for hover and the active nav item.
+global Look {
+    out property <color> hover: Theme.overlay-1;
+    out property <color> accent-soft: Theme.accent.with-alpha(0.16);
+    out property <color> accent-strong: Theme.accent.mix(#ffffff, 0.9);
+    out property <color> danger: #f7768e;
 }
 
-component Label inherits Text {
-    color: Theme.text-1;
+// .hint: 12px, text-2, at most 560px wide, line-height 1.45.
+component Hint inherits Text {
+    color: Theme.text-2;
     font-size: 12px;
     wrap: word-wrap;
-    vertical-alignment: center;
     horizontal-alignment: I18n.rtl ? right : left;
 }
 
-component Button inherits Rectangle {
+component HintBlock inherits HorizontalLayout {
+    in property <string> text;
+    in property <color> color: Theme.text-2;
+    alignment: I18n.rtl ? end : start;
+    Hint {
+        width: min(self.preferred-width, 560px);
+        text: root.text;
+        color: root.color;
+    }
+}
+
+// .field-label: 12px, text-2.
+component FieldLabel inherits Text {
+    color: Theme.text-2;
+    font-size: 12px;
+    horizontal-alignment: I18n.rtl ? right : left;
+}
+
+// button: border-1, radius 8, padding 7px 14px, transparent; .danger red.
+component Btn inherits Rectangle {
     in property <string> text;
     in property <bool> danger;
-    in property <bool> primary;
+    in property <bool> mono;
+    in property <length> min: 0;
     in property <bool> enabled: true;
     callback clicked;
-    height: 30px;
-    min-width: label.preferred-width + 24px;
+    height: 32px;
+    width: max(root.min, label.preferred-width + 30px);
     border-radius: 8px;
-    background: !root.enabled ? Theme.surface-1 : root.danger ? Theme.danger.with-alpha(t.has-hover ? 0.32 : 0.2) : root.primary ? Theme.accent : t.has-hover ? Theme.surface-4 : Theme.surface-2;
     border-width: 1px;
-    border-color: root.danger ? Theme.danger.with-alpha(0.5) : Theme.border-2;
+    border-color: root.danger ? #f7768e66 : Theme.border-1;
+    background: t.has-hover && root.enabled ? Look.hover : transparent;
     opacity: root.enabled ? 1 : 0.5;
     label := Text {
         text: root.text;
-        color: root.primary ? Theme.on-accent : root.danger ? Theme.danger : Theme.text-1;
-        font-size: 12px;
+        color: root.danger ? Look.danger : Theme.text-1;
+        font-size: 13px;
+        font-family: root.mono ? "Cascadia Mono" : "";
+        font-weight: root.mono ? 600 : 400;
     }
     t := TouchArea {
         enabled: root.enabled;
@@ -111,205 +145,444 @@ component Button inherits Rectangle {
     }
 }
 
-component Switch inherits Rectangle {
+// The browser checkbox with accent-color: a 13px box, accent fill when checked.
+component CheckBox inherits Rectangle {
     in property <bool> checked;
     in property <bool> enabled: true;
-    width: 34px;
-    height: 20px;
-    y: 0;
-    border-radius: 10px;
-    background: root.checked ? Theme.accent : Theme.surface-4;
-    border-width: 1px;
-    border-color: Theme.border-2;
+    width: 13px;
+    height: 13px;
+    border-radius: 2.5px;
+    background: root.checked ? Theme.accent : #ffffff0f;
+    border-width: root.checked ? 0 : 1px;
+    border-color: Theme.text-3;
     opacity: root.enabled ? 1 : 0.45;
-    Rectangle {
-        // Mirrored with the text: "on" is the end the text runs toward.
-        x: (root.checked != I18n.rtl) ? parent.width - self.width - 3px : 3px;
-        width: 14px;
-        height: 14px;
-        border-radius: 7px;
-        background: root.checked ? Theme.on-accent : Theme.text-2;
-        animate x { duration: Theme.reduce-motion ? 0ms : 120ms; }
+    if root.checked: Path {
+        width: 9px;
+        height: 9px;
+        viewbox-width: 12;
+        viewbox-height: 12;
+        commands: "M2 6.5l2.6 2.6L10 3.4";
+        stroke: #ffffff;
+        stroke-width: 1.6px;
+        fill: transparent;
     }
 }
 
-// A labelled switch with an optional hint under it.
+// label.toggle: checkbox, 8px, label; an optional hint under it.
 component Toggle inherits VerticalLayout {
     in property <string> text;
     in property <string> hint;
     in property <bool> checked;
     in property <bool> enabled: true;
     callback toggled(bool);
-    spacing: 3px;
+    spacing: 6px;
     HorizontalLayout {
-        spacing: 10px;
-        // The switch leads the label, from whichever side the text starts.
-        if !I18n.rtl: Switch {
-            checked: root.checked;
-            enabled: root.enabled;
+        spacing: 8px;
+        alignment: I18n.rtl ? end : start;
+        if !I18n.rtl: VerticalLayout {
+            alignment: center;
+            CheckBox {
+                checked: root.checked;
+                enabled: root.enabled;
+            }
         }
-        Label {
+        Text {
             text: root.text;
-            horizontal-stretch: 1;
+            color: Theme.text-1;
+            font-size: 13px;
+            vertical-alignment: center;
+            wrap: word-wrap;
         }
-        if I18n.rtl: Switch {
-            checked: root.checked;
+        if I18n.rtl: VerticalLayout {
+            alignment: center;
+            CheckBox {
+                checked: root.checked;
+                enabled: root.enabled;
+            }
+        }
+        TouchArea {
             enabled: root.enabled;
+            mouse-cursor: pointer;
+            clicked => {
+                root.toggled(!root.checked);
+            }
         }
     }
-    if root.hint != "": Hint {
+    if root.hint != "": HintBlock {
         text: root.hint;
     }
+}
+
+// The browser radio with accent-color.
+component Radio inherits HorizontalLayout {
+    in property <string> text;
+    in property <bool> checked;
+    callback picked;
+    spacing: 6px;
+    VerticalLayout {
+        alignment: center;
+        Rectangle {
+            width: 13px;
+            height: 13px;
+            border-radius: 6.5px;
+            background: root.checked ? Theme.accent : #ffffff0f;
+            border-width: root.checked ? 0 : 1px;
+            border-color: Theme.text-3;
+            if root.checked: Rectangle {
+                width: 5px;
+                height: 5px;
+                border-radius: 2.5px;
+                background: Theme.on-accent;
+            }
+        }
+    }
+    Text {
+        text: root.text;
+        color: Theme.text-1;
+        font-size: 13px;
+        vertical-alignment: center;
+    }
     TouchArea {
-        enabled: root.enabled;
         mouse-cursor: pointer;
         clicked => {
-            root.toggled(!root.checked);
+            root.picked();
         }
     }
 }
 
-// A number box: typed digits, committed on Enter or when focus leaves.
-// Rust clamps the value and the canonical one comes back through `value`.
-component NumberField inherits Rectangle {
+// NumberField.svelte: the input, then a 22px column of up/down steppers.
+// Committed on Enter, on focus loss and on a step; Rust clamps the value and
+// the canonical one comes back through `value`.
+component NumberField inherits HorizontalLayout {
     in property <string> value;
     in property <string> suffix;
     in property <length> field-width: 96px;
     callback commit(string);
-    height: 30px;
-    HorizontalLayout {
-        spacing: 8px;
-        alignment: I18n.rtl ? end : start;
-        Rectangle {
-            width: root.field-width;
-            border-radius: 8px;
-            background: Theme.bg-0;
-            border-width: 1px;
-            border-color: input.has-focus ? Theme.accent : Theme.border-2;
-            input := TextInput {
-                x: 8px;
-                width: parent.width - 16px;
-                text: root.value;
-                color: Theme.text-1;
-                font-size: 12px;
-                vertical-alignment: center;
-                single-line: true;
-                input-type: InputType.number;
-                accepted => {
+    spacing: 8px;
+    alignment: I18n.rtl ? end : start;
+    Rectangle {
+        width: root.field-width;
+        height: 32px;
+        border-radius: 8px;
+        background: Theme.surface-2;
+        border-width: 1px;
+        border-color: input.has-focus ? Theme.accent : hover.has-hover ? Theme.border-2 : Theme.border-1;
+        hover := TouchArea {
+            mouse-cursor: text;
+            clicked => {
+                input.focus();
+            }
+        }
+        input := TextInput {
+            x: 10px;
+            width: parent.width - 10px - 6px - 22px;
+            text: root.value;
+            color: Theme.text-1;
+            font-size: 13px;
+            vertical-alignment: center;
+            single-line: true;
+            input-type: InputType.number;
+            accepted => {
+                root.commit(self.text);
+            }
+            changed has-focus => {
+                if (!self.has-focus && self.text != root.value) {
                     root.commit(self.text);
                 }
-                changed has-focus => {
-                    if (!self.has-focus && self.text != root.value) {
-                        root.commit(self.text);
+            }
+        }
+        // .steps
+        Rectangle {
+            x: parent.width - 23px;
+            width: 22px;
+            Rectangle {
+                x: 0;
+                width: 1px;
+                background: Theme.border-1;
+            }
+            up := Rectangle {
+                x: 1px;
+                y: 1px;
+                width: 21px;
+                height: (parent.height - 3px) / 2;
+                background: up-t.pressed ? Look.accent-soft : up-t.has-hover ? Theme.overlay-1 : transparent;
+                Path {
+                    width: 9px;
+                    height: 6px;
+                    viewbox-width: 10;
+                    viewbox-height: 6;
+                    commands: "M1 5l4-4 4 4";
+                    stroke: up-t.has-hover ? Theme.text-1 : Theme.text-3;
+                    stroke-width: 1.3px;
+                    fill: transparent;
+                }
+                up-t := TouchArea {
+                    clicked => {
+                        root.commit((input.text.to-float() + 1) + "");
+                    }
+                }
+            }
+            Rectangle {
+                x: 1px;
+                y: up.y + up.height;
+                width: 21px;
+                height: 1px;
+                background: Theme.border-1;
+            }
+            Rectangle {
+                x: 1px;
+                y: up.y + up.height + 1px;
+                width: 21px;
+                height: up.height;
+                background: down-t.pressed ? Look.accent-soft : down-t.has-hover ? Theme.overlay-1 : transparent;
+                Path {
+                    width: 9px;
+                    height: 6px;
+                    viewbox-width: 10;
+                    viewbox-height: 6;
+                    commands: "M1 1l4 4 4-4";
+                    stroke: down-t.has-hover ? Theme.text-1 : Theme.text-3;
+                    stroke-width: 1.3px;
+                    fill: transparent;
+                }
+                down-t := TouchArea {
+                    clicked => {
+                        root.commit(max(0, input.text.to-float() - 1) + "");
                     }
                 }
             }
         }
-        if root.suffix != "": Label {
-            text: root.suffix;
-        }
+    }
+    if root.suffix != "": Text {
+        text: root.suffix;
+        color: Theme.text-2;
+        font-size: 13px;
+        vertical-alignment: center;
     }
     changed value => {
         input.text = root.value;
     }
 }
 
-component Segmented inherits HorizontalLayout {
+// A <select>: input-bg, border-1, radius 8, padding 7px 10px, a chevron.
+component Select inherits Rectangle {
     in property <[string]> options;
     in property <int> selected;
-    callback select(int);
-    spacing: 4px;
-    alignment: start;
-    for option[i] in root.options: Rectangle {
-        height: 28px;
-        width: seg.preferred-width + 20px;
-        border-radius: 7px;
-        background: i == root.selected ? Theme.accent : t.has-hover ? Theme.surface-4 : Theme.surface-2;
-        seg := Text {
-            text: option;
-            color: i == root.selected ? Theme.on-accent : Theme.text-1;
-            font-size: 11px;
+    in property <length> min: 0;
+    callback picked(int);
+    height: 32px;
+    width: max(root.min, label.preferred-width + 40px);
+    border-radius: 8px;
+    background: Theme.surface-2;
+    border-width: 1px;
+    border-color: Theme.border-1;
+    label := Text {
+        x: 10px;
+        text: root.options[root.selected];
+        color: Theme.text-1;
+        font-size: 13px;
+        vertical-alignment: center;
+    }
+    Path {
+        x: parent.width - 20px;
+        width: 9px;
+        height: 5px;
+        viewbox-width: 10;
+        viewbox-height: 6;
+        commands: "M1 1l4 4 4-4";
+        stroke: Theme.text-3;
+        stroke-width: 1.4px;
+        fill: transparent;
+    }
+    TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            list.show();
         }
-        t := TouchArea {
-            mouse-cursor: pointer;
-            clicked => {
-                root.select(i);
+    }
+    list := PopupWindow {
+        y: root.height + 6px;
+        width: max(root.width, 220px);
+        Rectangle {
+            border-radius: 10px;
+            background: Theme.bg-0;
+            Rectangle {
+                border-radius: 10px;
+                background: Theme.surface-3;
+                border-width: 1px;
+                border-color: Theme.border-2;
+                drop-shadow-color: #00000052;
+                drop-shadow-blur: 32px;
+                drop-shadow-offset-y: 12px;
+            }
+            VerticalLayout {
+                padding: 4px;
+                for option[i] in root.options: Rectangle {
+                    height: 30px;
+                    border-radius: 7px;
+                    background: opt-t.has-hover ? Theme.overlay-1 : transparent;
+                    Text {
+                        x: 9px;
+                        text: option;
+                        color: i == root.selected ? Look.accent-strong : Theme.text-1;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                    }
+                    opt-t := TouchArea {
+                        clicked => {
+                            root.picked(i);
+                        }
+                    }
+                }
             }
         }
     }
 }
 
+// .field: label above, 6px gap.
+// A <label class="field-label"> wraps its control in a .row with a 2px top
+// margin: `wrapped` adds those 2px.
 component Field inherits VerticalLayout {
     in property <string> title;
-    spacing: 6px;
-    Text {
+    in property <bool> wrapped;
+    spacing: root.wrapped ? 8px : 6px;
+    if root.title != "": FieldLabel {
         text: root.title;
-        color: Theme.text-2;
-        font-size: 11px;
-        font-weight: 600;
-        horizontal-alignment: I18n.rtl ? right : left;
     }
     @children
 }
 
+// .content section: 14px between fields, an h2 at 15px.
 component Section inherits VerticalLayout {
     in property <string> title;
-    padding: 22px;
-    spacing: 16px;
+    padding-left: 24px;
+    padding-right: 24px;
+    padding-top: 20px;
+    padding-bottom: 40px;
+    spacing: 14px;
     alignment: start;
-    Text {
-        text: root.title;
-        color: Theme.text-1;
-        font-size: 18px;
-        font-weight: 600;
-        horizontal-alignment: I18n.rtl ? right : left;
+    // h2 { margin: 0 0 4px }
+    VerticalLayout {
+        padding-bottom: 4px;
+        Text {
+            text: root.title;
+            color: Theme.text-1;
+            font-size: 15px;
+            font-weight: 600;
+            horizontal-alignment: I18n.rtl ? right : left;
+        }
     }
     @children
 }
 
+// ThemePreview.svelte: a miniature popup painted in the theme's own colors.
+// .tile: 148px, padding 10px, gap 8px; .frame: padding 6px, gap 4px.
 component ThemeTile inherits Rectangle {
     in property <ThemeSwatch> swatch;
     in property <bool> selected;
     callback chosen(string);
-    width: 112px;
-    height: 86px;
-    border-radius: 10px;
+    width: 148px;
+    height: 10px + frame.height + 8px + name.preferred-height + 10px;
+    border-radius: 14px;
     background: root.swatch.bg;
     border-width: root.selected ? 2px : 1px;
-    border-color: root.selected ? Theme.accent : Theme.border-2;
-    clip: true;
-    Rectangle {
-        x: 10px;
-        y: 10px;
-        width: 44px;
-        height: 34px;
-        border-radius: 6px;
-        background: root.swatch.surface;
+    border-color: root.selected ? root.swatch.accent : root.swatch.border;
+    frame := Rectangle {
+        x: 11px;
+        y: 11px;
+        width: 126px;
+        height: 79px;
+        border-radius: 7px;
+        background: root.swatch.frame;
+        border-width: 1px;
+        border-color: root.swatch.frame-border;
+        // .titlebar: accent pill, a wide pill, a pill.
+        Rectangle {
+            x: 7px;
+            y: 7px;
+            width: 14px;
+            height: 6px;
+            border-radius: 3px;
+            background: root.swatch.accent;
+        }
+        Rectangle {
+            x: 24px;
+            y: 7px;
+            width: 78px;
+            height: 6px;
+            border-radius: 3px;
+            background: root.swatch.surface;
+        }
+        Rectangle {
+            x: 105px;
+            y: 7px;
+            width: 14px;
+            height: 6px;
+            border-radius: 3px;
+            background: root.swatch.surface-2;
+        }
+        // .tabs: the active one in accent, wider.
+        Rectangle {
+            x: 7px;
+            y: 17px;
+            width: 20px;
+            height: 5px;
+            border-radius: 2.5px;
+            background: root.swatch.accent;
+        }
+        Rectangle {
+            x: 30px;
+            y: 17px;
+            width: 16px;
+            height: 5px;
+            border-radius: 2.5px;
+            background: root.swatch.surface-2;
+        }
+        Rectangle {
+            x: 49px;
+            y: 17px;
+            width: 16px;
+            height: 5px;
+            border-radius: 2.5px;
+            background: root.swatch.surface-2;
+        }
+        // .grid: two rows of four cards, the first one live.
+        for i in 8: Rectangle {
+            x: 7px + mod(i, 4) * 28.75px;
+            y: 26px + floor(i / 4) * 20px;
+            width: 25.75px;
+            height: 17px;
+            border-radius: 3px;
+            background: root.swatch.surface;
+            border-width: i == 0 ? 2px : 1px;
+            border-color: i == 0 ? root.swatch.accent : root.swatch.border;
+        }
+        // .statusbar: a short pill, then the accent dot at the far end.
+        Rectangle {
+            x: 7px;
+            y: 67.5px;
+            width: 22px;
+            height: 4px;
+            border-radius: 2px;
+            background: root.swatch.surface-2;
+        }
+        Rectangle {
+            x: 114px;
+            y: 67px;
+            width: 5px;
+            height: 5px;
+            border-radius: 2.5px;
+            background: root.swatch.accent;
+        }
     }
-    Rectangle {
-        x: 60px;
-        y: 10px;
-        width: 42px;
-        height: 34px;
-        border-radius: 6px;
-        background: root.swatch.surface;
-    }
-    Rectangle {
-        x: 10px;
-        y: 50px;
-        width: 26px;
-        height: 6px;
-        border-radius: 3px;
-        background: root.swatch.accent;
-    }
-    Text {
-        x: 10px;
-        y: parent.height - self.height - 6px;
-        width: parent.width - 20px;
+    name := Text {
+        x: 0;
+        y: frame.y + frame.height + 8px;
+        width: parent.width;
         text: root.swatch.label;
         color: root.swatch.text;
-        font-size: 10px;
-        overflow: elide;
+        font-size: 12px;
+        horizontal-alignment: center;
     }
     TouchArea {
         mouse-cursor: pointer;
@@ -327,13 +600,15 @@ export component SettingsWindow inherits Window {
     preferred-height: 660px;
     min-width: 720px;
     min-height: 480px;
-    default-font-size: 12px;
+    default-font-size: 13px;
+    default-font-family: "Segoe UI Variable Text";
 
     in property <SettingsData> data;
-    // Two rows of theme tiles: Slint has no wrapping layout.
+    // The theme tiles, one strip; split in two only for historical reasons.
     in property <[ThemeSwatch]> themes;
     in property <[ThemeSwatch]> themes-more;
     in property <[LangOption]> languages;
+    in property <string> language-name;
     in property <[AccentPreset]> accents;
     in property <string> version;
     in property <string> error;
@@ -368,390 +643,399 @@ export component SettingsWindow inherits Window {
     callback clear-history(bool);
     callback dismiss-error();
 
-    VerticalLayout {
-        if root.progress != "": Rectangle {
-            height: 30px;
-            background: Theme.surface-2;
-            Rectangle {
-                x: 0;
-                width: parent.width * root.progress-fraction;
-                background: Theme.accent.with-alpha(0.3);
-            }
-            Text {
-                text: root.progress;
-                color: Theme.text-1;
-                font-size: 11px;
-            }
-        }
-        if root.error != "": Rectangle {
-            height: 34px;
-            background: Theme.danger.with-alpha(0.18);
-            HorizontalLayout {
-                padding-left: 14px;
+    // .settings background: --bg (bg-1) over the window.
+    Rectangle {
+        background: Theme.bg-1;
+    }
+
+    Rectangle {
+        // nav: 180px, padding 16px 8px, gap 2px, a hairline on its inner edge.
+        Rectangle {
+            x: I18n.rtl ? parent.width - 180px : 0;
+            width: 180px;
+            height: parent.height;
+            VerticalLayout {
+                padding-top: 16px;
+                padding-bottom: 16px;
+                padding-left: 8px;
                 padding-right: 8px;
-                spacing: 8px;
-                Text {
-                    text: root.error;
-                    color: Theme.text-1;
-                    font-size: 11px;
-                    vertical-alignment: center;
-                    overflow: elide;
-                    horizontal-stretch: 1;
-                }
-                Button {
-                    y: 2px;
-                    text: I18n.tr("settings.dismiss", I18n.revision);
-                    clicked => {
-                        root.dismiss-error();
+                spacing: 2px;
+                alignment: start;
+                for key[i] in ["general", "storage", "appearance", "privacy", "data", "about"]: Rectangle {
+                    height: 33px;
+                    border-radius: 8px;
+                    background: i == root.section || nav.has-hover ? Look.hover : transparent;
+                    Text {
+                        x: 12px;
+                        width: parent.width - 24px;
+                        text: I18n.tr("settings.tab." + key, I18n.revision);
+                        color: i == root.section || nav.has-hover ? Theme.text-1 : Theme.text-2;
+                        font-size: 13px;
+                        vertical-alignment: center;
+                        horizontal-alignment: I18n.rtl ? right : left;
+                    }
+                    nav := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.section = i;
+                        }
                     }
                 }
             }
+            Rectangle {
+                x: I18n.rtl ? 0 : parent.width - 1px;
+                width: 1px;
+                background: Theme.border-1;
+            }
         }
 
-        Rectangle {
-            vertical-stretch: 1;
+        ScrollView {
+            x: I18n.rtl ? 0 : 180px;
+            width: parent.width - 180px;
+            height: parent.height;
+            VerticalLayout {
+                alignment: start;
 
-            // Section list, on the side the text starts from.
-            Rectangle {
-                x: I18n.rtl ? parent.width - 190px : 0;
-                width: 190px;
-                height: parent.height;
-                background: Theme.surface-1;
-                VerticalLayout {
-                    padding: 10px;
-                    spacing: 2px;
-                    alignment: start;
-                    for key[i] in ["general", "storage", "appearance", "privacy", "data", "about"]: Rectangle {
-                        height: 34px;
-                        border-radius: 8px;
-                        background: i == root.section ? Theme.surface-4 : nav.has-hover ? Theme.surface-3 : transparent;
-                        Text {
-                            x: 12px;
-                            width: parent.width - 24px;
-                            text: I18n.tr("settings.tab." + key, I18n.revision);
-                            color: i == root.section ? Theme.text-1 : Theme.text-2;
-                            font-size: 13px;
-                            vertical-alignment: center;
-                            horizontal-alignment: I18n.rtl ? right : left;
+                // -- General ------------------------------------------------------
+                if root.section == 0: Section {
+                    title: I18n.tr("settings.tab.general", I18n.revision);
+                    Field {
+                        title: I18n.tr("settings.hotkey", I18n.revision);
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: I18n.rtl ? end : start;
+                            recorder := FocusScope {
+                                width: max(140px, hk.preferred-width + 30px);
+                                height: 32px;
+                                key-pressed(event) => {
+                                    if (!root.recording) {
+                                        return reject;
+                                    }
+                                    if (event.text == Key.Escape) {
+                                        root.recording = false;
+                                        return accept;
+                                    }
+                                    root.record-hotkey(event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift, event.modifiers.meta);
+                                    accept
+                                }
+                                Rectangle {
+                                    border-radius: 8px;
+                                    border-width: 1px;
+                                    border-color: root.recording ? Theme.accent : Theme.border-1;
+                                    background: hk-t.has-hover ? Look.hover : transparent;
+                                    hk := Text {
+                                        text: root.recording ? I18n.tr("settings.pressChord", I18n.revision) : root.data.hotkey;
+                                        color: Theme.text-1;
+                                        font-size: 13px;
+                                        font-family: "Cascadia Mono";
+                                        font-weight: 600;
+                                    }
+                                    hk-t := TouchArea {
+                                        mouse-cursor: pointer;
+                                        clicked => {
+                                            root.recording = true;
+                                            recorder.focus();
+                                        }
+                                    }
+                                }
+                            }
+                            if !root.recording: Btn {
+                                text: I18n.tr("settings.hotkeyRecord", I18n.revision);
+                                clicked => {
+                                    root.recording = true;
+                                    recorder.focus();
+                                }
+                            }
                         }
-                        nav := TouchArea {
-                            mouse-cursor: pointer;
-                            clicked => {
-                                root.section = i;
+                        if root.recording: HintBlock {
+                            text: I18n.tr("settings.hotkeyRecording", I18n.revision);
+                        }
+                        if root.hotkey-error != "": HintBlock {
+                            text: root.hotkey-error;
+                            color: Look.danger;
+                        }
+                        if root.hotkey-warning != "" && !root.recording: HintBlock {
+                            text: root.hotkey-warning;
+                        }
+                    }
+                    Toggle {
+                        text: I18n.tr("settings.aggressiveMode", I18n.revision);
+                        hint: root.data.aggressive ? I18n.tr("settings.aggressiveModeHint", I18n.revision) : "";
+                        checked: root.data.aggressive;
+                        toggled(v) => {
+                            root.set-bool("hotkey.aggressiveMode", v);
+                        }
+                    }
+                    Toggle {
+                        text: I18n.tr("settings.winV", I18n.revision);
+                        hint: I18n.tr("settings.winVHint", I18n.revision);
+                        checked: root.win-v == 1;
+                        enabled: root.win-v >= 0;
+                        toggled(v) => {
+                            root.set-win-v(v);
+                        }
+                    }
+                    Toggle {
+                        text: I18n.tr("settings.launchOnStartup", I18n.revision);
+                        checked: root.data.launch-on-startup;
+                        toggled(v) => {
+                            root.set-bool("behavior.launchOnStartup", v);
+                        }
+                    }
+                    Toggle {
+                        text: I18n.tr("settings.silentStart", I18n.revision);
+                        checked: root.data.silent-start;
+                        toggled(v) => {
+                            root.set-bool("behavior.silentStart", v);
+                        }
+                    }
+                    Toggle {
+                        text: I18n.tr("settings.captureEnabled", I18n.revision);
+                        hint: root.data.capture-enabled ? "" : I18n.tr("settings.capturePaused", I18n.revision);
+                        checked: root.data.capture-enabled;
+                        toggled(v) => {
+                            root.set-bool("behavior.captureEnabled", v);
+                        }
+                    }
+                    Toggle {
+                        text: I18n.tr("settings.autoPaste", I18n.revision);
+                        hint: root.data.auto-paste ? I18n.tr("settings.autoPasteHint", I18n.revision) : "";
+                        checked: root.data.auto-paste;
+                        toggled(v) => {
+                            root.set-bool("behavior.autoPaste", v);
+                        }
+                    }
+                    Toggle {
+                        text: I18n.tr("settings.pastePlain", I18n.revision);
+                        checked: root.data.paste-plain;
+                        toggled(v) => {
+                            root.set-bool("behavior.pasteAsPlainText", v);
+                        }
+                    }
+                    Toggle {
+                        text: I18n.tr("settings.closeOnCopy", I18n.revision);
+                        checked: root.data.close-on-copy;
+                        toggled(v) => {
+                            root.set-bool("behavior.closeOnCopy", v);
+                        }
+                    }
+                }
+
+                // -- Storage --------------------------------------------------------
+                if root.section == 1: Section {
+                    title: I18n.tr("settings.tab.storage", I18n.revision);
+                    Field {
+                        title: I18n.tr("settings.storeLocation", I18n.revision);
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: I18n.rtl ? end : start;
+                            Text {
+                                text: root.data.store-path != "" ? root.data.store-path : I18n.tr("settings.storeDefault", I18n.revision);
+                                color: Theme.text-2;
+                                font-family: "Cascadia Mono";
+                                font-size: 12px;
+                                vertical-alignment: center;
+                                wrap: word-wrap;
+                            }
+                            Btn {
+                                text: I18n.tr("settings.change", I18n.revision);
+                                clicked => {
+                                    root.pick-store();
+                                }
+                            }
+                        }
+                        HintBlock {
+                            text: I18n.tr("settings.storeLocationHint", I18n.revision);
+                        }
+                    }
+                    Field {
+                        title: I18n.tr("settings.retention", I18n.revision);
+                        wrapped: true;
+                        NumberField {
+                            value: root.data.retention-days;
+                            suffix: I18n.tr("settings.days", I18n.revision);
+                            field-width: 112px;
+                            commit(v) => {
+                                root.set-number("storage.retentionDays", v);
                             }
                         }
                     }
-                }
-            }
-            Rectangle {
-                x: I18n.rtl ? parent.width - 191px : 190px;
-                width: 1px;
-                height: parent.height;
-                background: Theme.border-1;
-            }
-
-            ScrollView {
-                x: I18n.rtl ? 0 : 191px;
-                width: parent.width - 191px;
-                height: parent.height;
-                VerticalLayout {
-                    alignment: start;
-
-                    // -- General --------------------------------------------------------
-                    if root.section == 0: Section {
-                        title: I18n.tr("settings.tab.general", I18n.revision);
-                        Field {
-                            title: I18n.tr("settings.hotkey", I18n.revision);
-                            HorizontalLayout {
+                    Field {
+                        title: I18n.tr("settings.tempFiles", I18n.revision);
+                        wrapped: true;
+                        NumberField {
+                            value: root.data.temp-days;
+                            suffix: I18n.tr("settings.days", I18n.revision);
+                            field-width: 112px;
+                            commit(v) => {
+                                root.set-number("storage.tempFilesDays", v);
+                            }
+                        }
+                        HintBlock {
+                            text: I18n.tr("settings.tempFilesHint", I18n.revision);
+                        }
+                    }
+                    Field {
+                        title: I18n.tr("settings.maxItemSize", I18n.revision);
+                        wrapped: true;
+                        NumberField {
+                            value: root.data.max-item-mb;
+                            suffix: I18n.tr("settings.mb", I18n.revision);
+                            field-width: 100px;
+                            commit(v) => {
+                                root.set-number("storage.maxItemMB", v);
+                            }
+                        }
+                        HintBlock {
+                            text: I18n.tr("settings.maxItemSizeHint", I18n.revision);
+                        }
+                    }
+                    Field {
+                        title: I18n.tr("settings.storeCap", I18n.revision);
+                        wrapped: true;
+                        NumberField {
+                            value: root.data.store-cap-mb;
+                            suffix: I18n.tr("settings.storeCapUnit", I18n.revision);
+                            field-width: 100px;
+                            commit(v) => {
+                                root.set-number("storage.maxStoreMB", v);
+                            }
+                        }
+                    }
+                    Toggle {
+                        text: I18n.tr("settings.notifyFull", I18n.revision);
+                        checked: root.data.notify-full;
+                        toggled(v) => {
+                            root.set-bool("storage.notifyWhenFull", v);
+                        }
+                    }
+                    // .usage: a panel, padding 12px, radius 12px, at most 640px.
+                    HorizontalLayout {
+                        Rectangle {
+                            max-width: 640px;
+                            horizontal-stretch: 1;
+                            height: usage-col.preferred-height;
+                            border-radius: 12px;
+                            background: Theme.surface-1;
+                            border-width: 1px;
+                            border-color: Theme.border-1;
+                            usage-col := VerticalLayout {
+                                padding: 12px;
                                 spacing: 8px;
-                                alignment: I18n.rtl ? end : start;
-                                recorder := FocusScope {
-                                    width: 200px;
-                                    height: 32px;
-                                    key-pressed(event) => {
-                                        if (!root.recording) {
-                                            return reject;
-                                        }
-                                        if (event.text == Key.Escape) {
-                                            root.recording = false;
-                                            return accept;
-                                        }
-                                        root.record-hotkey(event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift, event.modifiers.meta);
-                                        accept
+                                HorizontalLayout {
+                                    Text {
+                                        text: I18n.tr("settings.storageUsage", I18n.revision);
+                                        color: Theme.text-2;
+                                        font-size: 12px;
+                                        horizontal-stretch: 1;
                                     }
+                                    Text {
+                                        text: root.usage-summary;
+                                        color: Theme.text-2;
+                                        font-size: 12px;
+                                    }
+                                }
+                                // .meter: 14px, radius 7, input-bg.
+                                meter := Rectangle {
+                                    height: 14px;
+                                    border-radius: 7px;
+                                    background: Theme.surface-2;
+                                    clip: true;
+                                    for seg in root.usage: Rectangle {
+                                        x: meter.width * seg.start;
+                                        width: meter.width * seg.fraction;
+                                        background: seg.color;
+                                    }
+                                    // Rounded ends: the clip is rectangular in the
+                                    // software renderer, so mask the corners with
+                                    // the panel's own color (surface-1 over the window).
                                     Rectangle {
-                                        border-radius: 8px;
-                                        background: Theme.bg-0;
-                                        border-width: 1px;
-                                        border-color: root.recording ? Theme.accent : Theme.border-2;
-                                        Text {
-                                            text: root.recording ? I18n.tr("settings.pressChord", I18n.revision) : root.data.hotkey;
-                                            color: Theme.text-1;
-                                            font-size: 13px;
-                                            font-weight: 600;
+                                        x: -7px;
+                                        y: -7px;
+                                        width: parent.width + 14px;
+                                        height: parent.height + 14px;
+                                        border-radius: 14px;
+                                        border-width: 7px;
+                                        border-color: Theme.card-corner;
+                                    }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    for seg in root.usage: HorizontalLayout {
+                                        spacing: 8px;
+                                        alignment: I18n.rtl ? end : start;
+                                        if !I18n.rtl: VerticalLayout {
+                                            alignment: center;
+                                            Rectangle {
+                                                width: 8px;
+                                                height: 8px;
+                                                border-radius: 4px;
+                                                background: seg.color;
+                                            }
                                         }
-                                        TouchArea {
-                                            mouse-cursor: pointer;
-                                            clicked => {
-                                                root.recording = true;
-                                                recorder.focus();
+                                        Text {
+                                            text: seg.label;
+                                            color: Theme.text-2;
+                                            font-size: 13px;
+                                        }
+                                        if I18n.rtl: VerticalLayout {
+                                            alignment: center;
+                                            Rectangle {
+                                                width: 8px;
+                                                height: 8px;
+                                                border-radius: 4px;
+                                                background: seg.color;
                                             }
                                         }
                                     }
                                 }
-                                if !root.recording: Button {
-                                    text: I18n.tr("settings.hotkeyRecord", I18n.revision);
-                                    clicked => {
-                                        root.recording = true;
-                                        recorder.focus();
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    alignment: I18n.rtl ? end : start;
+                                    NumberField {
+                                        value: root.clean-days;
+                                        field-width: 112px;
+                                        commit(v) => {
+                                            root.clean-days = v;
+                                        }
                                     }
-                                }
-                            }
-                            if root.recording: Hint {
-                                text: I18n.tr("settings.hotkeyRecording", I18n.revision);
-                            }
-                            if root.hotkey-error != "": Hint {
-                                text: root.hotkey-error;
-                                color: Theme.danger;
-                            }
-                            if root.hotkey-warning != "" && !root.recording: Hint {
-                                text: root.hotkey-warning;
-                            }
-                        }
-                        Toggle {
-                            text: I18n.tr("settings.aggressiveMode", I18n.revision);
-                            hint: root.data.aggressive ? I18n.tr("settings.aggressiveModeHint", I18n.revision) : "";
-                            checked: root.data.aggressive;
-                            toggled(v) => {
-                                root.set-bool("hotkey.aggressiveMode", v);
-                            }
-                        }
-                        Toggle {
-                            text: I18n.tr("settings.winV", I18n.revision);
-                            hint: I18n.tr("settings.winVHint", I18n.revision);
-                            checked: root.win-v == 1;
-                            enabled: root.win-v >= 0;
-                            toggled(v) => {
-                                root.set-win-v(v);
-                            }
-                        }
-                        Toggle {
-                            text: I18n.tr("settings.launchOnStartup", I18n.revision);
-                            checked: root.data.launch-on-startup;
-                            toggled(v) => {
-                                root.set-bool("behavior.launchOnStartup", v);
-                            }
-                        }
-                        Toggle {
-                            text: I18n.tr("settings.silentStart", I18n.revision);
-                            checked: root.data.silent-start;
-                            toggled(v) => {
-                                root.set-bool("behavior.silentStart", v);
-                            }
-                        }
-                        Toggle {
-                            text: I18n.tr("settings.captureEnabled", I18n.revision);
-                            hint: root.data.capture-enabled ? "" : I18n.tr("settings.capturePaused", I18n.revision);
-                            checked: root.data.capture-enabled;
-                            toggled(v) => {
-                                root.set-bool("behavior.captureEnabled", v);
-                            }
-                        }
-                        Toggle {
-                            text: I18n.tr("settings.autoPaste", I18n.revision);
-                            hint: root.data.auto-paste ? I18n.tr("settings.autoPasteHint", I18n.revision) : "";
-                            checked: root.data.auto-paste;
-                            toggled(v) => {
-                                root.set-bool("behavior.autoPaste", v);
-                            }
-                        }
-                        Toggle {
-                            text: I18n.tr("settings.pastePlain", I18n.revision);
-                            checked: root.data.paste-plain;
-                            toggled(v) => {
-                                root.set-bool("behavior.pasteAsPlainText", v);
-                            }
-                        }
-                        Toggle {
-                            text: I18n.tr("settings.closeOnCopy", I18n.revision);
-                            checked: root.data.close-on-copy;
-                            toggled(v) => {
-                                root.set-bool("behavior.closeOnCopy", v);
-                            }
-                        }
-                    }
-
-                    // -- Storage ----------------------------------------------------------
-                    if root.section == 1: Section {
-                        title: I18n.tr("settings.tab.storage", I18n.revision);
-                        Field {
-                            title: I18n.tr("settings.storeLocation", I18n.revision);
-                            HorizontalLayout {
-                                spacing: 8px;
-                                Rectangle {
-                                    horizontal-stretch: 1;
-                                    height: 30px;
-                                    border-radius: 8px;
-                                    background: Theme.bg-0;
                                     Text {
-                                        x: 10px;
-                                        width: parent.width - 20px;
-                                        text: root.data.store-path != "" ? root.data.store-path : I18n.tr("settings.storeDefault", I18n.revision);
-                                        color: Theme.text-2;
-                                        font-family: "Cascadia Mono";
-                                        font-size: 11px;
+                                        text: I18n.tr("settings.cleanOlder", I18n.revision);
+                                        color: Theme.text-1;
+                                        font-size: 13px;
                                         vertical-alignment: center;
-                                        horizontal-alignment: I18n.rtl ? right : left;
-                                        overflow: elide;
                                     }
-                                }
-                                Button {
-                                    text: I18n.tr("settings.change", I18n.revision);
-                                    clicked => {
-                                        root.pick-store();
-                                    }
-                                }
-                            }
-                            Hint {
-                                text: I18n.tr("settings.storeLocationHint", I18n.revision);
-                            }
-                        }
-                        Field {
-                            title: I18n.tr("settings.retention", I18n.revision);
-                            NumberField {
-                                value: root.data.retention-days;
-                                suffix: I18n.tr("settings.days", I18n.revision);
-                                field-width: 112px;
-                                commit(v) => {
-                                    root.set-number("storage.retentionDays", v);
-                                }
-                            }
-                        }
-                        Field {
-                            title: I18n.tr("settings.tempFiles", I18n.revision);
-                            NumberField {
-                                value: root.data.temp-days;
-                                suffix: I18n.tr("settings.days", I18n.revision);
-                                field-width: 112px;
-                                commit(v) => {
-                                    root.set-number("storage.tempFilesDays", v);
-                                }
-                            }
-                            Hint {
-                                text: I18n.tr("settings.tempFilesHint", I18n.revision);
-                            }
-                        }
-                        Field {
-                            title: I18n.tr("settings.maxItemSize", I18n.revision);
-                            NumberField {
-                                value: root.data.max-item-mb;
-                                suffix: I18n.tr("settings.mb", I18n.revision);
-                                commit(v) => {
-                                    root.set-number("storage.maxItemMB", v);
-                                }
-                            }
-                            Hint {
-                                text: I18n.tr("settings.maxItemSizeHint", I18n.revision);
-                            }
-                        }
-                        Field {
-                            title: I18n.tr("settings.storeCap", I18n.revision);
-                            NumberField {
-                                value: root.data.store-cap-mb;
-                                suffix: I18n.tr("settings.storeCapUnit", I18n.revision);
-                                commit(v) => {
-                                    root.set-number("storage.maxStoreMB", v);
-                                }
-                            }
-                        }
-                        Toggle {
-                            text: I18n.tr("settings.notifyFull", I18n.revision);
-                            checked: root.data.notify-full;
-                            toggled(v) => {
-                                root.set-bool("storage.notifyWhenFull", v);
-                            }
-                        }
-                        Field {
-                            title: I18n.tr("settings.storageUsage", I18n.revision);
-                            Label {
-                                text: root.usage-summary;
-                            }
-                            // A fixed width: a width taken from the scroll view's
-                            // content would depend on itself.
-                            HorizontalLayout {
-                                alignment: I18n.rtl ? end : start;
-                                Rectangle {
-                                    width: 420px;
-                                    height: 12px;
-                                    border-radius: 6px;
-                                    background: Theme.surface-2;
-                                    clip: true;
-                                    HorizontalLayout {
-                                        alignment: I18n.rtl ? end : start;
-                                        for seg in root.usage: Rectangle {
-                                            width: 420px * seg.fraction;
-                                            background: seg.color;
+                                    Btn {
+                                        text: I18n.tr("settings.cleanNow", I18n.revision);
+                                        clicked => {
+                                            root.clean-now(root.clean-days);
                                         }
                                     }
                                 }
-                            }
-                            for seg in root.usage: HorizontalLayout {
-                                spacing: 6px;
-                                alignment: I18n.rtl ? end : start;
-                                if !I18n.rtl: Rectangle {
-                                    width: 8px;
-                                    height: 8px;
-                                    y: 4px;
-                                    border-radius: 4px;
-                                    background: seg.color;
+                                if root.cleanup-result != "": Text {
+                                    text: root.cleanup-result;
+                                    color: #9ece6a;
+                                    font-size: 12px;
                                 }
-                                Hint {
-                                    text: seg.label;
-                                    color: Theme.text-2;
-                                }
-                                if I18n.rtl: Rectangle {
-                                    width: 8px;
-                                    height: 8px;
-                                    y: 4px;
-                                    border-radius: 4px;
-                                    background: seg.color;
-                                }
-                            }
-                            HorizontalLayout {
-                                spacing: 8px;
-                                alignment: I18n.rtl ? end : start;
-                                NumberField {
-                                    value: root.clean-days;
-                                    field-width: 90px;
-                                    commit(v) => {
-                                        root.clean-days = v;
-                                    }
-                                }
-                                Label {
-                                    text: I18n.tr("settings.cleanOlder", I18n.revision);
-                                }
-                                Button {
-                                    text: I18n.tr("settings.cleanNow", I18n.revision);
-                                    clicked => {
-                                        root.clean-now(root.clean-days);
-                                    }
-                                }
-                            }
-                            if root.cleanup-result != "": Hint {
-                                text: root.cleanup-result;
-                                color: Theme.ok;
                             }
                         }
                     }
+                }
 
-                    // -- Appearance -------------------------------------------------------
-                    if root.section == 2: Section {
-                        title: I18n.tr("settings.tab.appearance", I18n.revision);
-                        Field {
-                            title: I18n.tr("settings.theme", I18n.revision);
-                            HorizontalLayout {
-                                spacing: 8px;
-                                alignment: I18n.rtl ? end : start;
+                // -- Appearance -----------------------------------------------------
+                if root.section == 2: Section {
+                    title: I18n.tr("settings.tab.appearance", I18n.revision);
+                    Field {
+                        title: I18n.tr("settings.theme", I18n.revision);
+                        // .theme-strip: one row that scrolls sideways.
+                        Flickable {
+                            height: strip.preferred-height + 14px;
+                            content-width: strip.preferred-width + 4px;
+                            interactive: true;
+                            strip := HorizontalLayout {
+                                x: 2px;
+                                y: 4px;
+                                spacing: 10px;
                                 for swatch in root.themes: ThemeTile {
                                     swatch: swatch;
                                     selected: swatch.name == root.data.theme;
@@ -759,10 +1043,6 @@ export component SettingsWindow inherits Window {
                                         root.set-text("appearance.theme", name);
                                     }
                                 }
-                            }
-                            HorizontalLayout {
-                                spacing: 8px;
-                                alignment: I18n.rtl ? end : start;
                                 for swatch in root.themes-more: ThemeTile {
                                     swatch: swatch;
                                     selected: swatch.name == root.data.theme;
@@ -771,161 +1051,310 @@ export component SettingsWindow inherits Window {
                                     }
                                 }
                             }
-                            Hint {
-                                text: I18n.tr("settings.themeHint", I18n.revision);
-                            }
                         }
-                        Field {
-                            title: I18n.tr("settings.language", I18n.revision);
-                            HorizontalLayout {
-                                spacing: 4px;
-                                alignment: I18n.rtl ? end : start;
-                                Segmented {
-                                    options: [I18n.tr("settings.languageSystem", I18n.revision)];
-                                    selected: root.data.language == "system" ? 0 : -1;
-                                    select => {
-                                        root.set-text("appearance.language", "system");
+                        HintBlock {
+                            text: I18n.tr("settings.themeHint", I18n.revision);
+                        }
+                    }
+                    Field {
+                        title: I18n.tr("settings.language", I18n.revision);
+                        // LanguagePicker.svelte: a full-width trigger, the
+                        // list on --bg-0 under --surface-3.
+                        lang := Rectangle {
+                            height: 32px;
+                            border-radius: 10px;
+                            background: lang-t.has-hover ? Theme.surface-4 : Theme.surface-2;
+                            border-width: 1px;
+                            border-color: Theme.border-2;
+                            Text {
+                                x: 10px;
+                                width: parent.width - 40px;
+                                text: root.language-name;
+                                color: Theme.text-1;
+                                font-size: 12px;
+                                vertical-alignment: center;
+                                horizontal-alignment: I18n.rtl ? right : left;
+                            }
+                            Path {
+                                x: I18n.rtl ? 10px : parent.width - 22px;
+                                width: 12px;
+                                height: 12px;
+                                viewbox-width: 12;
+                                viewbox-height: 12;
+                                commands: "M3 4.5l3 3 3-3";
+                                stroke: Theme.text-3;
+                                stroke-width: 1.4px;
+                                fill: transparent;
+                            }
+                            lang-t := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    lang-list.show();
+                                }
+                            }
+                            lang-list := PopupWindow {
+                                y: lang.height + 6px;
+                                width: lang.width;
+                                Rectangle {
+                                    border-radius: 10px;
+                                    background: Theme.bg-0;
+                                    Rectangle {
+                                        border-radius: 10px;
+                                        background: Theme.surface-3;
+                                        border-width: 1px;
+                                        border-color: Theme.border-2;
+                                    }
+                                    VerticalLayout {
+                                        padding: 4px;
+                                        Rectangle {
+                                            height: 30px;
+                                            border-radius: 7px;
+                                            background: sys-t.has-hover ? Theme.overlay-1 : transparent;
+                                            Text {
+                                                x: 9px;
+                                                text: I18n.tr("settings.languageSystem", I18n.revision);
+                                                color: root.data.language == "system" ? Look.accent-strong : Theme.text-1;
+                                                font-size: 12px;
+                                                vertical-alignment: center;
+                                            }
+                                            sys-t := TouchArea {
+                                                clicked => {
+                                                    root.set-text("appearance.language", "system");
+                                                }
+                                            }
+                                        }
+                                        for l in root.languages: Rectangle {
+                                            height: 30px;
+                                            border-radius: 7px;
+                                            background: l-t.has-hover ? Theme.overlay-1 : transparent;
+                                            Text {
+                                                x: 9px;
+                                                text: l.name;
+                                                color: root.data.language == l.code ? Look.accent-strong : Theme.text-1;
+                                                font-size: 12px;
+                                                vertical-alignment: center;
+                                            }
+                                            l-t := TouchArea {
+                                                clicked => {
+                                                    root.set-text("appearance.language", l.code);
+                                                }
+                                            }
+                                        }
                                     }
                                 }
-                                for lang in root.languages: Segmented {
-                                    options: [lang.name];
-                                    selected: root.data.language == lang.code ? 0 : -1;
-                                    select => {
-                                        root.set-text("appearance.language", lang.code);
-                                    }
-                                }
-                            }
-                            Hint {
-                                text: I18n.tr("settings.languageHint", I18n.revision);
                             }
                         }
-                        Field {
-                            title: I18n.tr("settings.popupSize", I18n.revision);
-                            Segmented {
-                                options: [I18n.tr("settings.percentOfMonitor", I18n.revision), I18n.tr("settings.fixedSize", I18n.revision)];
-                                selected: root.data.size-percent ? 0 : 1;
-                                select(i) => {
-                                    root.set-text("window.sizeMode", i == 0 ? "percent" : "fixed");
+                        HintBlock {
+                            text: I18n.tr("settings.languageHint", I18n.revision);
+                        }
+                    }
+                    Field {
+                        title: I18n.tr("settings.popupSize", I18n.revision);
+                        HorizontalLayout {
+                            spacing: 18px;
+                            alignment: I18n.rtl ? end : start;
+                            Radio {
+                                text: I18n.tr("settings.percentOfMonitor", I18n.revision);
+                                checked: root.data.size-percent;
+                                picked => {
+                                    root.set-text("window.sizeMode", "percent");
                                 }
                             }
-                            if root.data.size-percent: NumberField {
-                                value: root.data.percent;
-                                suffix: "%";
-                                commit(v) => {
-                                    root.set-number("window.percentOfMonitor", v);
-                                }
-                            }
-                            if !root.data.size-percent: HorizontalLayout {
-                                spacing: 8px;
-                                alignment: I18n.rtl ? end : start;
-                                NumberField {
-                                    value: root.data.fixed-w;
-                                    suffix: "×";
-                                    commit(v) => {
-                                        root.set-number("window.fixed.width", v);
-                                    }
-                                }
-                                NumberField {
-                                    value: root.data.fixed-h;
-                                    suffix: "px";
-                                    commit(v) => {
-                                        root.set-number("window.fixed.height", v);
-                                    }
+                            Radio {
+                                text: I18n.tr("settings.fixedSize", I18n.revision);
+                                checked: !root.data.size-percent;
+                                picked => {
+                                    root.set-text("window.sizeMode", "fixed");
                                 }
                             }
                         }
-                        Toggle {
-                            text: I18n.tr("settings.dragBar", I18n.revision);
-                            hint: I18n.tr("settings.dragBarHint", I18n.revision);
-                            checked: root.data.drag-bar;
-                            toggled(v) => {
-                                root.set-bool("window.dragBar", v);
+                    }
+                    if root.data.size-percent: Field {
+                        title: I18n.tr("settings.percentOfMonitor", I18n.revision);
+                        wrapped: true;
+                        NumberField {
+                            value: root.data.percent;
+                            field-width: 92px;
+                            commit(v) => {
+                                root.set-number("window.percentOfMonitor", v);
                             }
                         }
-                        Field {
-                            title: I18n.tr("settings.gridZoom", I18n.revision);
+                    }
+                    if !root.data.size-percent: Field {
+                        title: I18n.tr("settings.fixedWidthHeight", I18n.revision);
+                        wrapped: true;
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: I18n.rtl ? end : start;
                             NumberField {
-                                value: root.data.zoom;
-                                field-width: 70px;
+                                value: root.data.fixed-w;
+                                field-width: 104px;
                                 commit(v) => {
-                                    root.set-number("window.zoomStep", v);
+                                    root.set-number("window.fixed.width", v);
+                                }
+                            }
+                            Text {
+                                text: "×";
+                                color: Theme.text-1;
+                                vertical-alignment: center;
+                            }
+                            NumberField {
+                                value: root.data.fixed-h;
+                                field-width: 104px;
+                                commit(v) => {
+                                    root.set-number("window.fixed.height", v);
                                 }
                             }
                         }
-                        Toggle {
-                            text: I18n.tr("settings.showAge", I18n.revision);
-                            checked: root.data.show-age;
-                            toggled(v) => {
-                                root.set-bool("appearance.showAge", v);
+                    }
+                    Toggle {
+                        text: I18n.tr("settings.dragBar", I18n.revision);
+                        hint: I18n.tr("settings.dragBarHint", I18n.revision);
+                        checked: root.data.drag-bar;
+                        toggled(v) => {
+                            root.set-bool("window.dragBar", v);
+                        }
+                    }
+                    Field {
+                        title: I18n.tr("settings.gridZoom", I18n.revision);
+                        wrapped: true;
+                        NumberField {
+                            value: root.data.zoom;
+                            field-width: 80px;
+                            commit(v) => {
+                                root.set-number("window.zoomStep", v);
                             }
                         }
-                        if root.data.show-age: Field {
-                            title: I18n.tr("settings.timeFormat", I18n.revision);
-                            Segmented {
+                    }
+                    Toggle {
+                        text: I18n.tr("settings.showAge", I18n.revision);
+                        checked: root.data.show-age;
+                        toggled(v) => {
+                            root.set-bool("appearance.showAge", v);
+                        }
+                    }
+                    if root.data.show-age: Field {
+                        title: I18n.tr("settings.timeFormat", I18n.revision);
+                        wrapped: true;
+                        HorizontalLayout {
+                            alignment: I18n.rtl ? end : start;
+                            Select {
                                 options: [I18n.tr("settings.timeFormatRelative", I18n.revision), I18n.tr("settings.timeFormatClock24", I18n.revision), I18n.tr("settings.timeFormatClock12", I18n.revision)];
                                 selected: root.data.time-format;
-                                select(i) => {
+                                picked(i) => {
                                     root.set-text("appearance.timeFormat", i == 0 ? "relative" : i == 1 ? "clock24" : "clock12");
                                 }
                             }
-                            Hint {
-                                text: I18n.tr("settings.timeFormatHint", I18n.revision);
-                            }
                         }
-                        Field {
-                            title: I18n.tr("settings.formatLabel", I18n.revision);
-                            Segmented {
+                        HintBlock {
+                            text: I18n.tr("settings.timeFormatHint", I18n.revision);
+                        }
+                    }
+                    Field {
+                        title: I18n.tr("settings.formatLabel", I18n.revision);
+                        wrapped: true;
+                        HorizontalLayout {
+                            alignment: I18n.rtl ? end : start;
+                            Select {
                                 options: [I18n.tr("settings.sizeOff", I18n.revision), I18n.tr("settings.sizeSmall", I18n.revision), I18n.tr("settings.sizeMedium", I18n.revision), I18n.tr("settings.sizeLarge", I18n.revision)];
                                 selected: root.data.label-size;
-                                select(i) => {
+                                picked(i) => {
                                     root.set-text("appearance.formatLabelSize", i == 0 ? "off" : i == 1 ? "small" : i == 2 ? "medium" : "large");
                                 }
                             }
                         }
-                        Toggle {
-                            text: I18n.tr("settings.animateGifs", I18n.revision);
-                            checked: root.data.animate-gifs;
-                            toggled(v) => {
-                                root.set-bool("appearance.animateGifs", v);
-                            }
+                    }
+                    Toggle {
+                        text: I18n.tr("settings.animateGifs", I18n.revision);
+                        checked: root.data.animate-gifs;
+                        toggled(v) => {
+                            root.set-bool("appearance.animateGifs", v);
                         }
-                        Toggle {
-                            text: I18n.tr("settings.reduceMotion", I18n.revision);
-                            checked: root.data.reduce-motion;
-                            toggled(v) => {
-                                root.set-bool("appearance.reduceMotion", v);
-                            }
+                    }
+                    Toggle {
+                        text: I18n.tr("settings.reduceMotion", I18n.revision);
+                        checked: root.data.reduce-motion;
+                        toggled(v) => {
+                            root.set-bool("appearance.reduceMotion", v);
                         }
-                        Field {
-                            title: I18n.tr("settings.accent", I18n.revision);
-                            HorizontalLayout {
-                                spacing: 6px;
-                                alignment: I18n.rtl ? end : start;
+                    }
+                    Field {
+                        title: I18n.tr("settings.accent", I18n.revision);
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: I18n.rtl ? end : start;
+                            // <input type="color">: a swatch in a frame; Slint
+                            // has no color picker, so it opens a palette.
+                            Rectangle {
+                                width: 50px;
+                                height: 27px;
+                                border-radius: 4px;
+                                border-width: 1px;
+                                border-color: Theme.border-2;
+                                background: Theme.surface-2;
                                 Rectangle {
-                                    width: 30px;
-                                    height: 30px;
-                                    border-radius: 8px;
-                                    background: root.data.effective-accent;
-                                    border-width: 1px;
-                                    border-color: Theme.border-3;
-                                }
-                                for a in root.accents: Rectangle {
-                                    width: 22px;
-                                    height: 22px;
+                                    x: 4px;
                                     y: 4px;
-                                    border-radius: 11px;
-                                    background: a.color;
-                                    border-width: a.hex == root.data.accent ? 2px : 0;
-                                    border-color: Theme.text-1;
-                                    TouchArea {
-                                        mouse-cursor: pointer;
-                                        clicked => {
-                                            root.set-text("appearance.accent", a.hex);
+                                    width: parent.width - 8px;
+                                    height: parent.height - 8px;
+                                    border-radius: 2px;
+                                    background: root.data.effective-accent;
+                                }
+                                TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => {
+                                        palette.show();
+                                    }
+                                }
+                                palette := PopupWindow {
+                                    y: parent.height + 6px;
+                                    Rectangle {
+                                        width: pal-row.preferred-width;
+                                        height: pal-row.preferred-height;
+                                        border-radius: 10px;
+                                        background: Theme.bg-0;
+                                        Rectangle {
+                                            border-radius: 10px;
+                                            background: Theme.surface-3;
+                                            border-width: 1px;
+                                            border-color: Theme.border-2;
+                                        }
+                                        pal-row := HorizontalLayout {
+                                            padding: 8px;
+                                            spacing: 6px;
+                                            for a in root.accents: Rectangle {
+                                                width: 22px;
+                                                height: 22px;
+                                                border-radius: 11px;
+                                                background: a.color;
+                                                border-width: a.hex == root.data.accent ? 2px : 0;
+                                                border-color: Theme.text-1;
+                                                TouchArea {
+                                                    mouse-cursor: pointer;
+                                                    clicked => {
+                                                        root.set-text("appearance.accent", a.hex);
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
-                                if root.data.accent != "": Button {
-                                    text: I18n.tr("settings.followTheme", I18n.revision);
+                            }
+                            Text {
+                                text: root.data.accent != "" ? root.data.accent : "theme";
+                                color: Theme.text-1;
+                                font-family: "Cascadia Mono";
+                                font-size: 13px;
+                                vertical-alignment: center;
+                            }
+                            // .linkish
+                            if root.data.accent != "": Text {
+                                text: I18n.tr("settings.followTheme", I18n.revision);
+                                color: follow-t.has-hover ? Look.accent-strong : Theme.accent;
+                                font-size: 12px;
+                                vertical-alignment: center;
+                                follow-t := TouchArea {
+                                    mouse-cursor: pointer;
                                     clicked => {
                                         root.set-text("appearance.accent", "");
                                     }
@@ -933,206 +1362,325 @@ export component SettingsWindow inherits Window {
                             }
                         }
                     }
+                }
 
-                    // -- Privacy ----------------------------------------------------------
-                    if root.section == 3: Section {
-                        title: I18n.tr("settings.tab.privacy", I18n.revision);
-                        Toggle {
-                            text: I18n.tr("settings.respectFlags", I18n.revision);
-                            hint: I18n.tr("settings.respectFlagsHint", I18n.revision);
-                            checked: root.data.respect-flags;
-                            toggled(v) => {
-                                root.set-bool("privacy.respectClipboardFlags", v);
-                            }
+                // -- Privacy ----------------------------------------------------------
+                if root.section == 3: Section {
+                    title: I18n.tr("settings.tab.privacy", I18n.revision);
+                    Toggle {
+                        text: I18n.tr("settings.respectFlags", I18n.revision);
+                        checked: root.data.respect-flags;
+                        toggled(v) => {
+                            root.set-bool("privacy.respectClipboardFlags", v);
                         }
-                        Toggle {
-                            text: I18n.tr("settings.linkPreviews", I18n.revision);
-                            hint: I18n.tr("settings.linkPreviewsHint", I18n.revision);
-                            checked: root.data.link-previews;
-                            toggled(v) => {
-                                root.set-bool("privacy.linkPreviews", v);
-                            }
+                    }
+                    // A <p class="hint"> of its own: the section's 14px gap above it.
+                    HintBlock {
+                        text: I18n.tr("settings.respectFlagsHint", I18n.revision);
+                    }
+                    Toggle {
+                        text: I18n.tr("settings.linkPreviews", I18n.revision);
+                        checked: root.data.link-previews;
+                        toggled(v) => {
+                            root.set-bool("privacy.linkPreviews", v);
                         }
-                        Field {
-                            title: I18n.tr("settings.blockedProcesses", I18n.revision);
-                            Hint {
-                                text: I18n.tr("settings.blockedHint", I18n.revision);
-                            }
-                            for p in root.data.blocked: HorizontalLayout {
-                                spacing: 8px;
-                                alignment: I18n.rtl ? end : start;
-                                Rectangle {
-                                    width: 260px;
-                                    height: 28px;
-                                    border-radius: 6px;
-                                    background: Theme.surface-2;
-                                    Text {
-                                        x: 10px;
-                                        text: p;
-                                        color: Theme.text-1;
-                                        font-family: "Cascadia Mono";
-                                        font-size: 11px;
-                                        vertical-alignment: center;
-                                    }
-                                }
-                                Button {
-                                    text: "×";
-                                    clicked => {
-                                        root.remove-blocked(p);
-                                    }
-                                }
-                            }
-                            HorizontalLayout {
-                                spacing: 8px;
-                                alignment: I18n.rtl ? end : start;
-                                Rectangle {
-                                    width: 260px;
-                                    height: 30px;
+                    }
+                    HintBlock {
+                        text: I18n.tr("settings.linkPreviewsHint", I18n.revision);
+                    }
+                    Field {
+                        title: I18n.tr("settings.blockedProcesses", I18n.revision);
+                        HintBlock {
+                            text: I18n.tr("settings.blockedHint", I18n.revision);
+                        }
+                        // .blocked-list: rows on input-bg, 6px apart, at most 480px.
+                        if root.data.blocked.length > 0: HorizontalLayout {
+                            VerticalLayout {
+                                max-width: 480px;
+                                horizontal-stretch: 1;
+                                spacing: 6px;
+                                for p in root.data.blocked: Rectangle {
                                     border-radius: 8px;
-                                    background: Theme.bg-0;
-                                    border-width: 1px;
-                                    border-color: blocked-input.has-focus ? Theme.accent : Theme.border-2;
-                                    blocked-input := TextInput {
-                                        x: 8px;
-                                        width: parent.width - 16px;
-                                        text <=> root.new-blocked;
-                                        color: Theme.text-1;
-                                        font-size: 12px;
-                                        vertical-alignment: center;
-                                        single-line: true;
-                                        accepted => {
-                                            root.add-blocked(root.new-blocked);
-                                            root.new-blocked = "";
+                                    background: Theme.surface-2;
+                                    HorizontalLayout {
+                                        padding-left: 10px;
+                                        padding-right: 10px;
+                                        padding-top: 6px;
+                                        padding-bottom: 6px;
+                                        spacing: 8px;
+                                        Text {
+                                            text: p;
+                                            color: Theme.text-1;
+                                            font-family: "Cascadia Mono";
+                                            font-size: 12px;
+                                            font-weight: 600;
+                                            vertical-alignment: center;
+                                            horizontal-stretch: 1;
+                                        }
+                                        // padding 2px 10px, line-height 1.2
+                                        Rectangle {
+                                            width: 31px;
+                                            height: 22px;
+                                            border-radius: 8px;
+                                            border-width: 1px;
+                                            border-color: Theme.border-1;
+                                            background: rm-t.has-hover ? Look.hover : transparent;
+                                            Text {
+                                                text: "×";
+                                                color: Theme.text-1;
+                                                font-size: 13px;
+                                            }
+                                            rm-t := TouchArea {
+                                                mouse-cursor: pointer;
+                                                clicked => {
+                                                    root.remove-blocked(p);
+                                                }
+                                            }
                                         }
                                     }
-                                    if root.new-blocked == "": Text {
-                                        x: 8px;
-                                        text: I18n.tr("settings.processPlaceholder", I18n.revision);
-                                        color: Theme.text-3;
-                                        font-size: 12px;
-                                        vertical-alignment: center;
-                                    }
                                 }
-                                Button {
-                                    text: I18n.tr("settings.add", I18n.revision);
-                                    clicked => {
+                            }
+                        }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: I18n.rtl ? end : start;
+                            Rectangle {
+                                width: 220px;
+                                height: 32px;
+                                border-radius: 8px;
+                                background: Theme.surface-2;
+                                border-width: 1px;
+                                border-color: blocked-input.has-focus ? Theme.accent : Theme.border-1;
+                                blocked-input := TextInput {
+                                    x: 10px;
+                                    width: parent.width - 20px;
+                                    text <=> root.new-blocked;
+                                    color: Theme.text-1;
+                                    font-size: 13px;
+                                    vertical-alignment: center;
+                                    single-line: true;
+                                    accepted => {
                                         root.add-blocked(root.new-blocked);
                                         root.new-blocked = "";
                                     }
                                 }
+                                if root.new-blocked == "": Text {
+                                    x: 10px;
+                                    text: I18n.tr("settings.processPlaceholder", I18n.revision);
+                                    color: Theme.text-3;
+                                    font-size: 13px;
+                                    vertical-alignment: center;
+                                }
+                            }
+                            Btn {
+                                text: I18n.tr("settings.add", I18n.revision);
+                                clicked => {
+                                    root.add-blocked(root.new-blocked);
+                                    root.new-blocked = "";
+                                }
                             }
                         }
                     }
+                }
 
-                    // -- Data -------------------------------------------------------------
-                    if root.section == 4: Section {
-                        title: I18n.tr("settings.tab.data", I18n.revision);
-                        Field {
-                            title: I18n.tr("settings.export", I18n.revision);
-                            Hint {
-                                text: I18n.tr("settings.exportHint", I18n.revision);
-                            }
-                            HorizontalLayout {
-                                alignment: I18n.rtl ? end : start;
-                                Button {
-                                    text: I18n.tr("settings.exportButton", I18n.revision);
-                                    clicked => {
-                                        root.export-data();
-                                    }
-                                }
-                            }
+                // -- Data ---------------------------------------------------------------
+                if root.section == 4: Section {
+                    title: I18n.tr("settings.tab.data", I18n.revision);
+                    Field {
+                        title: I18n.tr("settings.export", I18n.revision);
+                        HintBlock {
+                            text: I18n.tr("settings.exportHint", I18n.revision);
                         }
-                        Field {
-                            title: I18n.tr("settings.import", I18n.revision);
-                            Segmented {
-                                options: [I18n.tr("settings.importMerge", I18n.revision), I18n.tr("settings.importReplace", I18n.revision)];
-                                selected: root.import-mode;
-                                select(i) => {
-                                    root.import-mode = i;
-                                }
-                            }
-                            HorizontalLayout {
-                                alignment: I18n.rtl ? end : start;
-                                Button {
-                                    text: I18n.tr("settings.importButton", I18n.revision);
-                                    clicked => {
-                                        root.import-data(root.import-mode);
-                                    }
-                                }
-                            }
-                        }
-                        Field {
-                            title: I18n.tr("settings.clearHistory", I18n.revision);
-                            Hint {
-                                text: I18n.tr("settings.clearHistoryHint", I18n.revision);
-                            }
-                            HorizontalLayout {
-                                alignment: I18n.rtl ? end : start;
-                                Button {
-                                    danger: true;
-                                    text: root.confirm-clear ? "Click again to confirm" : I18n.tr("settings.clearHistory", I18n.revision);
-                                    clicked => {
-                                        if (root.confirm-clear) {
-                                            root.confirm-clear = false;
-                                            root.clear-history(false);
-                                        } else {
-                                            root.confirm-clear = true;
-                                            root.confirm-reset = false;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Field {
-                            title: I18n.tr("settings.resetAll", I18n.revision);
-                            Hint {
-                                text: I18n.tr("settings.resetAllHint", I18n.revision);
-                            }
-                            HorizontalLayout {
-                                alignment: I18n.rtl ? end : start;
-                                Button {
-                                    danger: true;
-                                    text: root.confirm-reset ? "Click again to confirm" : I18n.tr("settings.resetAll", I18n.revision);
-                                    clicked => {
-                                        if (root.confirm-reset) {
-                                            root.confirm-reset = false;
-                                            root.clear-history(true);
-                                        } else {
-                                            root.confirm-reset = true;
-                                            root.confirm-clear = false;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        if root.cleanup-result != "": Hint {
-                            text: root.cleanup-result;
-                            color: Theme.ok;
-                        }
-                    }
-
-                    // -- About ------------------------------------------------------------
-                    if root.section == 5: Section {
-                        title: I18n.tr("settings.tab.about", I18n.revision);
-                        Text {
-                            text: "Rebuffer";
-                            color: Theme.text-1;
-                            font-size: 22px;
-                            font-weight: 700;
-                        }
-                        Hint {
-                            text: root.version;
-                        }
-                        Hint {
-                            text: I18n.tr("settings.aboutBody", I18n.revision);
-                        }
-                        // Required by the Slint Royalty-free license this build uses.
                         HorizontalLayout {
                             alignment: I18n.rtl ? end : start;
-                            AboutSlint {
-                                width: 240px;
+                            Btn {
+                                text: I18n.tr("settings.exportButton", I18n.revision);
+                                clicked => {
+                                    root.export-data();
+                                }
                             }
                         }
+                    }
+                    Field {
+                        title: I18n.tr("settings.import", I18n.revision);
+                        HorizontalLayout {
+                            spacing: 18px;
+                            alignment: I18n.rtl ? end : start;
+                            Radio {
+                                text: I18n.tr("settings.importMerge", I18n.revision);
+                                checked: root.import-mode == 0;
+                                picked => {
+                                    root.import-mode = 0;
+                                }
+                            }
+                            Radio {
+                                text: I18n.tr("settings.importReplace", I18n.revision);
+                                checked: root.import-mode == 1;
+                                picked => {
+                                    root.import-mode = 1;
+                                }
+                            }
+                        }
+                        HorizontalLayout {
+                            alignment: I18n.rtl ? end : start;
+                            Btn {
+                                text: I18n.tr("settings.importButton", I18n.revision);
+                                clicked => {
+                                    root.import-data(root.import-mode);
+                                }
+                            }
+                        }
+                    }
+                    Field {
+                        title: I18n.tr("settings.clearHistory", I18n.revision);
+                        HintBlock {
+                            text: I18n.tr("settings.clearHistoryHint", I18n.revision);
+                        }
+                        HorizontalLayout {
+                            alignment: I18n.rtl ? end : start;
+                            Btn {
+                                danger: true;
+                                text: root.confirm-clear ? "Click again to confirm" : "Clear history";
+                                clicked => {
+                                    if (root.confirm-clear) {
+                                        root.confirm-clear = false;
+                                        root.clear-history(false);
+                                    } else {
+                                        root.confirm-clear = true;
+                                        root.confirm-reset = false;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Field {
+                        title: I18n.tr("settings.resetAll", I18n.revision);
+                        HintBlock {
+                            text: I18n.tr("settings.resetAllHint", I18n.revision);
+                        }
+                        HorizontalLayout {
+                            alignment: I18n.rtl ? end : start;
+                            Btn {
+                                danger: true;
+                                text: root.confirm-reset ? "Click again to confirm" : "Reset everything";
+                                clicked => {
+                                    if (root.confirm-reset) {
+                                        root.confirm-reset = false;
+                                        root.clear-history(true);
+                                    } else {
+                                        root.confirm-reset = true;
+                                        root.confirm-clear = false;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if root.cleanup-result != "": Text {
+                        text: root.cleanup-result;
+                        color: #9ece6a;
+                        font-size: 12px;
+                    }
+                }
+
+                // -- About ----------------------------------------------------------------
+                if root.section == 5: Section {
+                    title: I18n.tr("settings.tab.about", I18n.revision);
+                    Text {
+                        text: "Rebuffer";
+                        color: Theme.text-1;
+                        font-size: 18px;
+                        font-weight: 600;
+                    }
+                    HintBlock {
+                        text: root.version;
+                    }
+                    HintBlock {
+                        text: I18n.tr("settings.aboutBody", I18n.revision);
+                    }
+                    // Required by the Slint Royalty-free license this build uses.
+                    HorizontalLayout {
+                        alignment: start;
+                        AboutSlint {
+                            width: 240px;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // .progress: a panel across the top while a long operation runs.
+    if root.progress != "": Rectangle {
+        y: 0;
+        height: 50px;
+        background: Theme.surface-1;
+        Rectangle {
+            y: parent.height - 1px;
+            height: 1px;
+            background: Theme.border-1;
+        }
+        VerticalLayout {
+            padding-left: 16px;
+            padding-right: 16px;
+            padding-top: 10px;
+            padding-bottom: 10px;
+            spacing: 6px;
+            Rectangle {
+                height: 6px;
+                border-radius: 3px;
+                background: Theme.surface-2;
+                clip: true;
+                Rectangle {
+                    x: 0;
+                    width: parent.width * root.progress-fraction;
+                    background: Theme.accent;
+                }
+            }
+            Text {
+                text: root.progress;
+                color: Theme.text-2;
+                font-size: 12px;
+            }
+        }
+    }
+
+    // .error-banner: top right, red, dark text.
+    if root.error != "": Rectangle {
+        x: parent.width - self.width - 10px;
+        y: 10px;
+        height: 36px;
+        width: min(err-row.preferred-width, parent.width - 20px);
+        border-radius: 10px;
+        background: #f7768e;
+        drop-shadow-color: #00000059;
+        drop-shadow-blur: 24px;
+        drop-shadow-offset-y: 6px;
+        err-row := HorizontalLayout {
+            padding-left: 14px;
+            padding-right: 14px;
+            spacing: 12px;
+            Text {
+                text: root.error;
+                color: #0b0d10;
+                font-size: 13px;
+                font-weight: 600;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            Rectangle {
+                y: (parent.height - self.height) / 2;
+                height: 22px;
+                width: dm.preferred-width + 20px;
+                border-radius: 6px;
+                background: #0000002e;
+                dm := Text {
+                    text: I18n.tr("settings.dismiss", I18n.revision);
+                    color: #0b0d10;
+                    font-weight: 600;
+                }
+                TouchArea {
+                    clicked => {
+                        root.dismiss-error();
                     }
                 }
             }

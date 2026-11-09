@@ -36,6 +36,10 @@ export global Theme {
     in-out property <color> warn: #e0af68;
     // appearance.reduceMotion: animations run with no duration.
     in-out property <bool> reduce-motion: false;
+    // What shows at a card's rounded corner: surface-1 over bg-1 over
+    // bg-0, composited in Rust (theme.rs). The software renderer clips to
+    // rectangles only, so cards mask their corners with this color.
+    in-out property <color> card-corner: #1d1f27;
 }
 
 export global I18n {

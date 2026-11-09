@@ -494,6 +494,15 @@ impl Window {
             .set_reduce_motion(s.appearance.reduce_motion);
         crate::i18n::apply(&self.ui, &s.appearance.language);
         self.ui.set_data(data(&s));
+        let lang = &s.appearance.language;
+        self.ui.set_language_name(if lang == "system" {
+            tr("settings.languageSystem").into()
+        } else {
+            crate::i18n::LANGUAGES
+                .iter()
+                .find(|(code, _)| code == lang)
+                .map_or_else(|| lang.as_str().into(), |(_, name)| (*name).into())
+        });
         // Six to a row fits the narrowest window.
         let mut swatches = crate::theme::swatches(|name| tr(&format!("theme.{name}")));
         let more = swatches.split_off(swatches.len().min(6));
@@ -534,10 +543,18 @@ impl Window {
             .into(),
         );
         let total = stats.total_bytes.max(1) as f32;
-        let segs: Vec<UsageSeg> = stats
-            .by_kind
-            .iter()
+        let mut start = 0.0;
+        // Largest first, so the meter reads from the biggest share down.
+        let mut kinds: Vec<_> = stats.by_kind.iter().collect();
+        kinds.sort_by_key(|k| std::cmp::Reverse(k.bytes));
+        let segs: Vec<UsageSeg> = kinds
+            .into_iter()
             .map(|k| UsageSeg {
+                start: {
+                    let s = start;
+                    start += k.bytes as f32 / total;
+                    s
+                },
                 fraction: k.bytes as f32 / total,
                 color: kind_color(&k.kind),
                 label: tr_with(

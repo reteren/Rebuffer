@@ -1,6 +1,11 @@
 // The Alt+V popup, ported from src/routes/Popup.svelte and its components
 // (Toolbar, Tabs, Grid, Card, ContextMenu, StatusBar, ZoomDial, EmptyState).
 // Behaviour lives in native/src/popup.rs; this file is layout and looks.
+//
+// Every size, radius, padding and color below is taken from the WebView
+// front end's CSS (tokens.css, global.css and each component's <style>) at
+// commit d9b5c91, so the two look the same. Where a value is not a token,
+// the comment names the CSS rule it came from.
 
 import { ListView } from "std-widgets.slint";
 import { Theme, I18n } from "globals.slint";
@@ -20,7 +25,7 @@ export struct CardData {
     // Colors: the swatch.
     swatch: color,
     format-label: string,
-    // 0..6, one of Theme.ext-1..7.
+    // 0..6, one of Theme.ext-1..7: the file icon's color.
     ext-color: int,
     age: string,
     pinned: bool,
@@ -33,6 +38,8 @@ export struct CardData {
 // A row of the grid: a day header when `header` is set, cards otherwise.
 export struct RowData {
     header: string,
+    // The first row carries the grid's top padding (--grid-pad).
+    first: bool,
     cards: [CardData],
 }
 
@@ -65,11 +72,14 @@ export struct MenuEntry {
 export global Layout {
     in-out property <length> tile-w: 116px;
     in-out property <length> tile-h: 154px;
+    // --grid-gap, --grid-pad, --group-header-h
     in-out property <length> gap: 10px;
     in-out property <length> pad: 16px;
     in-out property <length> header-h: 32px;
+    // Card text: 7.5px + (zoom - 1) * 1.6px, as Card.svelte computes it.
     in-out property <length> text-size: 10.7px;
-    in-out property <length> label-size: 10px;
+    // The format label: --fs-2xs / --fs-sm / --fs-lg for small/medium/large.
+    in-out property <length> label-size: 12px;
     in-out property <bool> show-age: true;
     in-out property <bool> show-label: true;
     public pure function ext(i: int) -> color {
@@ -95,20 +105,36 @@ export global Layout {
     }
 }
 
+// The --accent-soft / --accent-strong pair, derived like tokens.css does.
+global Accent {
+    out property <color> soft: Theme.accent.with-alpha(0.16);
+    out property <color> strong: Theme.accent.mix(#ffffff, 0.9);
+}
+
+// .badge in Card.svelte: a small glass tag over the preview.
 component Badge inherits Rectangle {
     in property <string> text;
-    in property <color> fg: Theme.text-bright;
-    in property <color> bg: Theme.scrim-2;
-    in property <length> size: 9px;
+    in property <color> fg: Theme.text-2;
+    in property <length> size: 10px;
+    in property <int> weight: 400;
+    in property <length> spacing: 0px;
+    in property <length> limit: 1000px;
     border-radius: 4px;
-    background: bg;
-    width: label.preferred-width + 8px;
-    height: label.preferred-height + 2px;
+    background: Theme.scrim-2;
+    border-width: 1px;
+    border-color: Theme.border-1;
+    width: min(label.preferred-width + 14px, root.limit);
+    height: root.size * 1.4 + 6px;
     label := Text {
+        x: 7px;
+        width: parent.width - 14px;
         text: root.text;
         color: root.fg;
         font-size: root.size;
-        font-weight: 600;
+        font-weight: root.weight;
+        letter-spacing: root.spacing;
+        vertical-alignment: center;
+        overflow: elide;
     }
 }
 
@@ -123,185 +149,283 @@ component Card inherits Rectangle {
 
     width: Layout.tile-w;
     height: Layout.tile-h;
-    border-radius: 10px;
-    background: touch.has-hover ? Theme.surface-2 : Theme.surface-1;
-    border-width: data.current || data.focused || data.selected ? 2px : 1px;
-    border-color: data.current ? Theme.accent : (data.selected || data.focused) ? Theme.accent.with-alpha(0.7) : Theme.border-1;
-    clip: true;
-    opacity: data.missing ? 0.55 : 1;
 
-    // The preview, by kind.
-    if data.has-image && data.kind != "link": Image {
-        x: 0;
-        y: 0;
-        width: parent.width;
-        height: parent.height;
-        source: data.image;
-        image-fit: cover;
+    // .card.current: box-shadow 0 0 0 2px accent, 0 0 12px -2px accent.
+    if data.current: Rectangle {
+        x: -2px;
+        y: -2px;
+        width: parent.width + 4px;
+        height: parent.height + 4px;
+        border-radius: 12px;
+        background: Theme.accent;
+        drop-shadow-color: Theme.accent;
+        drop-shadow-blur: 10px;
     }
-    if data.kind == "link" && data.has-image: Rectangle {
-        Image {
+
+    body := Rectangle {
+        border-radius: 10px;
+        background: Theme.surface-1;
+        border-width: 1px;
+        border-color: Theme.border-1;
+        opacity: root.data.missing ? 0.5 : 1;
+
+    // The padding box: everything the card shows lies inside its border.
+    Rectangle {
+        x: 1px;
+        y: 1px;
+        width: parent.width - 2px;
+        height: parent.height - 2px;
+        clip: true;
+
+        // -- preview, by kind ------------------------------------------------
+        if root.data.has-image && root.data.kind != "link": Image {
             width: parent.width;
             height: parent.height;
-            source: data.image;
+            source: root.data.image;
             image-fit: cover;
         }
-        Rectangle {
-            y: parent.height - self.height;
-            height: 34px;
-            background: @linear-gradient(0deg, Theme.scrim-1 0%, Theme.scrim-1 58%, transparent 100%);
-            Text {
-                x: 6px;
-                width: parent.width - 12px;
-                y: parent.height - self.height - 4px;
-                text: data.text;
-                color: Theme.text-bright;
-                font-size: 9px;
-                overflow: elide;
+        if root.data.kind == "link" && root.data.has-image: Rectangle {
+            Image {
+                width: parent.width;
+                height: parent.height;
+                source: root.data.image;
+                image-fit: cover;
             }
-        }
-    }
-    if data.kind == "link" && !data.has-image: VerticalLayout {
-        alignment: center;
-        spacing: 6px;
-        padding: 8px;
-        HorizontalLayout {
-            alignment: center;
+            // .link-caption: padding 16px 7px 26px over a scrim fading upward.
             Rectangle {
-                width: 30px;
-                height: 30px;
-                border-radius: 8px;
-                background: @linear-gradient(135deg, data.mono-a 0%, data.mono-b 100%);
-                Text {
-                    text: data.monogram;
+                y: parent.height - self.height;
+                height: caption.preferred-height + 42px;
+                background: @linear-gradient(0deg, Theme.scrim-1 0%, Theme.scrim-1 58%, transparent 100%);
+                caption := Text {
+                    x: 7px;
+                    y: 16px;
+                    width: parent.width - 14px;
+                    text: root.data.text;
                     color: Theme.text-bright;
-                    font-size: 14px;
-                    font-weight: 700;
+                    font-size: 10px;
+                    font-weight: 620;
+                    wrap: word-wrap;
+                    overflow: elide;
+                    max-height: 26px;
                 }
             }
         }
-        if data.text != "": Text {
-            text: data.text;
-            color: Theme.text-2;
-            font-size: 9px;
-            horizontal-alignment: center;
-            wrap: word-wrap;
-            overflow: elide;
-        }
-    }
-    if data.kind == "color": Rectangle {
-        x: 8px;
-        y: 8px;
-        width: parent.width - 16px;
-        height: parent.height - 16px;
-        border-radius: 8px;
-        background: data.swatch;
-        Rectangle {
-            width: chip.preferred-width + 10px;
-            height: chip.preferred-height + 4px;
-            border-radius: 4px;
-            background: Theme.scrim-1;
-            chip := Text {
-                text: data.text;
-                color: Theme.text-bright;
-                font-size: 9px;
+        if root.data.kind == "link" && !root.data.has-image: VerticalLayout {
+            alignment: center;
+            spacing: 6px;
+            padding: 10px;
+            HorizontalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 30px;
+                    height: 30px;
+                    border-radius: 8px;
+                    background: @linear-gradient(135deg, root.data.mono-a 0%, root.data.mono-b 100%);
+                    drop-shadow-color: #00000059;
+                    drop-shadow-blur: 2px;
+                    drop-shadow-offset-y: 1px;
+                    Text {
+                        text: root.data.monogram;
+                        color: Theme.text-bright;
+                        font-size: 14px;
+                        font-weight: 700;
+                    }
+                }
+            }
+            // .domain shows only when the badge, which names the site, is off.
+            if !Layout.show-label: Text {
+                text: root.data.text;
+                color: Theme.text-1;
+                font-size: 11px;
+                font-weight: 600;
+                horizontal-alignment: center;
+                overflow: elide;
             }
         }
-    }
-    if (data.kind == "text" || data.kind == "code") && !data.has-image: Rectangle {
-        x: 8px;
-        y: 8px;
-        width: parent.width - 16px;
-        height: parent.height - 16px;
-        border-radius: 8px;
-        background: Theme.bg-0;
-        // Starts below the time badge, which sits over the panel's corner.
-        Text {
-            x: 6px;
-            y: Layout.show-age ? 18px : 6px;
-            width: parent.width - 12px;
-            height: parent.height - self.y - 6px;
-            text: data.text;
-            color: Theme.text-1;
-            font-size: Layout.text-size;
-            font-family: data.kind == "code" ? "Cascadia Mono" : "";
-            wrap: word-wrap;
-            overflow: elide;
-            horizontal-alignment: I18n.rtl ? right : left;
+        if root.data.kind == "color": Rectangle {
+            x: 8px;
+            y: 8px;
+            width: parent.width - 16px;
+            height: parent.height - 16px;
+            border-radius: 8px;
+            background: root.data.swatch;
+            Rectangle {
+                width: chip.preferred-width + 16px;
+                height: chip.preferred-height + 6px;
+                border-radius: 7px;
+                background: Theme.scrim-1;
+                border-width: 1px;
+                border-color: Theme.border-1;
+                chip := Text {
+                    text: root.data.text;
+                    color: Theme.text-bright;
+                    font-family: "Cascadia Mono";
+                    font-size: 10px;
+                }
+            }
         }
-    }
-    if data.kind == "file" && !data.has-image: VerticalLayout {
-        alignment: center;
-        spacing: 4px;
-        padding: 8px;
-        Text {
-            text: "🗎";
-            font-size: 30px;
-            color: Layout.ext(data.ext-color);
-            horizontal-alignment: center;
-        }
-        Text {
-            text: data.text;
-            color: Theme.text-2;
-            font-size: 9px;
-            horizontal-alignment: center;
-            wrap: word-wrap;
-            overflow: elide;
-        }
-    }
-    if (data.kind == "video" || data.kind == "image" || data.kind == "other") && !data.has-image: Rectangle {
-        background: @linear-gradient(150deg, Theme.surface-2 0%, Theme.bg-0 100%);
-        if data.kind == "video": Rectangle {
-            width: 30px;
-            height: 30px;
-            border-radius: 15px;
-            background: Theme.scrim-1;
+        // .text-panel: inset 8px, padding 8px 9px, 7 lines at most.
+        if (root.data.kind == "text" || root.data.kind == "code") && !root.data.has-image: Rectangle {
+            x: 8px;
+            y: 8px;
+            width: parent.width - 16px;
+            height: parent.height - 16px;
+            border-radius: 8px;
+            background: Theme.bg-0;
+            border-width: 1px;
+            border-color: Theme.border-1;
+            clip: true;
             Text {
-                text: "▶";
-                color: Theme.text-bright;
-                font-size: 12px;
+                x: 10px;
+                y: 9px;
+                width: parent.width - 20px;
+                height: min(parent.height - 18px, Layout.text-size * 1.42 * 7);
+                text: root.data.text;
+                color: root.data.kind == "code" ? Theme.text-1 : Theme.text-2;
+                font-size: Layout.text-size;
+                font-family: root.data.kind == "code" ? "Cascadia Code" : "";
+                wrap: word-wrap;
+                overflow: elide;
+                horizontal-alignment: I18n.rtl ? right : left;
             }
         }
+        if root.data.kind == "file" && !root.data.has-image: VerticalLayout {
+            alignment: center;
+            spacing: 6px;
+            padding: 10px;
+            HorizontalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 32px;
+                    height: 32px;
+                    opacity: 0.92;
+                    Path {
+                        width: 32px;
+                        height: 32px;
+                        viewbox-width: 24;
+                        viewbox-height: 24;
+                        commands: "M6 3.5h8l4 4v13H6z M14 3.5v4h4";
+                        stroke: Layout.ext(root.data.ext-color);
+                        stroke-width: 1.4px;
+                        fill: transparent;
+                    }
+                }
+            }
+            Text {
+                text: root.data.text;
+                color: Theme.text-2;
+                font-size: 10px;
+                horizontal-alignment: center;
+                overflow: elide;
+            }
+        }
+        if (root.data.kind == "video" || root.data.kind == "image" || root.data.kind == "other") && !root.data.has-image: Rectangle {
+            background: @linear-gradient(150deg, Theme.surface-2 0%, Theme.bg-0 100%);
+            if root.data.kind == "video": Rectangle {
+                width: 34px;
+                height: 34px;
+                border-radius: 17px;
+                background: Theme.scrim-1;
+                border-width: 1px;
+                border-color: Theme.border-2;
+                Path {
+                    x: 11px;
+                    width: 13px;
+                    height: 13px;
+                    viewbox-width: 24;
+                    viewbox-height: 24;
+                    commands: "M8.2 5.6v12.8L19 12z";
+                    fill: Theme.text-bright;
+                }
+            }
+        }
+
+        // .card::after: the hover veil, accent-soft when selected or focused.
+        Rectangle {
+            background: (root.data.selected || root.data.focused) ? Accent.soft : touch.has-hover ? Theme.overlay-1 : transparent;
+            animate background { duration: Theme.reduce-motion ? 0ms : 90ms; }
+        }
+
+        // -- badges ------------------------------------------------------------
+        if Layout.show-age && root.data.age != "": Badge {
+            x: 6px;
+            y: 6px;
+            text: root.data.age;
+        }
+        HorizontalLayout {
+            x: parent.width - self.preferred-width - 6px;
+            y: 6px;
+            spacing: 4px;
+            if root.data.pinned: Badge {
+                width: 22px;
+                Path {
+                    width: 10px;
+                    height: 10px;
+                    viewbox-width: 24;
+                    viewbox-height: 24;
+                    commands: "M12 2a6 6 0 0 0-6 6c0 4.6 6 11 6 11s6-6.4 6-11a6 6 0 0 0-6-6Z";
+                    fill: Theme.accent;
+                }
+            }
+            if root.data.missing: Badge {
+                text: I18n.tr("card.missing", I18n.revision);
+                fg: Theme.danger;
+            }
+        }
+        if Layout.show-label && root.data.format-label != "": Badge {
+            x: 6px;
+            y: parent.height - self.height - 6px;
+            text: root.data.format-label;
+            fg: Theme.text-1;
+            size: Layout.label-size;
+            weight: 650;
+            spacing: Layout.label-size * 0.05;
+            limit: parent.width - 12px;
+        }
+
+        // Rounded corners for the content: a ring of the color under the card,
+        // since the software renderer clips to plain rectangles.
+        Rectangle {
+            x: -10px;
+            y: -10px;
+            width: parent.width + 20px;
+            height: parent.height + 20px;
+            border-radius: 19px;
+            border-width: 10px;
+            border-color: Theme.card-corner;
+        }
     }
 
-    // Selection veil, under the badges.
-    Rectangle {
-        background: (data.selected || data.focused) ? Theme.accent.with-alpha(0.14) : touch.has-hover ? Theme.overlay-1 : transparent;
+        // .card::before: the ring — border-3 on hover, accent when selected,
+        // accent-strong when focused. Drawn over everything else.
+        Rectangle {
+            border-radius: 10px;
+            border-width: 1px;
+            border-color: root.data.focused ? Accent.strong : root.data.selected ? Theme.accent : touch.has-hover ? Theme.border-3 : transparent;
+        }
     }
 
-    // Badges.
-    if Layout.show-age && data.age != "": Badge {
-        x: 6px;
-        y: 6px;
-        text: data.age;
-    }
-    HorizontalLayout {
-        x: parent.width - self.preferred-width - 6px;
-        y: 6px;
-        spacing: 3px;
-        if data.current: Badge {
+    // .badge.live: outside the clip so it is never cut by the card's corner.
+    if root.data.current: Rectangle {
+        x: parent.width - self.width - 4px;
+        y: 4px;
+        height: live.preferred-height + 4px;
+        width: min(live.preferred-width + 12px, parent.width - 8px);
+        border-radius: self.height / 2;
+        background: Theme.accent;
+        live := Text {
+            x: 6px;
+            width: parent.width - 12px;
             text: I18n.tr("card.inBuffer", I18n.revision);
-            bg: Theme.accent;
-            fg: Theme.on-accent;
+            color: Theme.on-accent;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+            overflow: elide;
         }
-        if data.pinned: Badge {
-            text: "★";
-        }
-        if data.missing: Badge {
-            text: I18n.tr("card.missing", I18n.revision);
-            bg: Theme.danger;
-        }
-    }
-    if Layout.show-label && data.format-label != "": Badge {
-        x: 6px;
-        y: parent.height - self.height - 6px;
-        text: data.format-label;
-        fg: Layout.ext(data.ext-color);
-        size: Layout.label-size;
     }
 
     touch := TouchArea {
-        mouse-cursor: pointer;
         pointer-event(event) => {
             if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
                 root.dragging = false;
@@ -325,29 +449,44 @@ component Card inherits Rectangle {
     }
 }
 
-component Chip inherits Rectangle {
+// .tab in Tabs.svelte.
+component Tab inherits Rectangle {
     in property <string> text;
     in property <string> count;
     in property <bool> active;
     callback clicked;
-    height: 26px;
-    width: row.preferred-width + 20px;
-    border-radius: 13px;
-    background: active ? Theme.accent : t.has-hover ? Theme.surface-4 : Theme.surface-2;
-    row := HorizontalLayout {
-        alignment: center;
-        spacing: 5px;
+    height: 28px;
+    border-radius: self.height / 2;
+    background: active ? Accent.soft : t.has-hover ? Theme.surface-2 : transparent;
+    animate background { duration: Theme.reduce-motion ? 0ms : 90ms; }
+    // .tab: padding 6px 12px, gap 6px. The layout sizes the pill.
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 6px;
         Text {
             text: root.text;
-            color: root.active ? Theme.on-accent : Theme.text-1;
-            font-size: 11px;
+            color: root.active ? Theme.text-1 : Theme.text-2;
+            font-size: 12px;
+            // CSS 550 on Segoe UI Variable reads as semibold; Slint snaps to
+            // the static weights, so ask for 600.
+            font-weight: 600;
             vertical-alignment: center;
         }
-        if root.count != "": Text {
-            text: root.count;
-            color: root.active ? Theme.on-accent.with-alpha(0.7) : Theme.text-3;
-            font-size: 10px;
-            vertical-alignment: center;
+        if root.count != "": VerticalLayout {
+            alignment: center;
+            Rectangle {
+            height: c.preferred-height + 2px;
+            width: c.preferred-width + 12px;
+            border-radius: self.height / 2;
+            background: root.active ? Theme.accent.with-alpha(0.12) : Theme.overlay-1;
+            c := Text {
+                text: root.count;
+                color: root.active ? Theme.accent : Theme.text-3;
+                font-size: 10px;
+                font-weight: 600;
+            }
+            }
         }
     }
     t := TouchArea {
@@ -358,19 +497,40 @@ component Chip inherits Rectangle {
     }
 }
 
-component IconButton inherits Rectangle {
+// .select in Toolbar.svelte: a native <select> look with the chevron mask.
+component SelectBox inherits Rectangle {
     in property <string> text;
+    // A <select> is as wide as its longest option, whichever one is chosen.
+    in property <string> widest;
     callback clicked;
     height: 30px;
-    width: max(30px, label.preferred-width + 18px);
-    border-radius: 8px;
-    background: t.pressed ? Theme.surface-4 : t.has-hover ? Theme.surface-3 : Theme.surface-2;
+    width: max(label.preferred-width, measure.preferred-width) + 42px;
+    measure := Text {
+        visible: false;
+        text: root.widest;
+        font-size: 12px;
+    }
+    border-radius: 7px;
+    background: t.has-hover ? Theme.surface-4 : Theme.surface-2;
     border-width: 1px;
     border-color: Theme.border-1;
     label := Text {
+        x: 12px;
         text: root.text;
         color: Theme.text-1;
         font-size: 12px;
+        vertical-alignment: center;
+    }
+    Path {
+        x: parent.width - 11px - 9px;
+        width: 9px;
+        height: 5px;
+        viewbox-width: 10;
+        viewbox-height: 6;
+        commands: "M1 1l4 4 4-4";
+        stroke: Theme.text-3;
+        stroke-width: 1.4px;
+        fill: transparent;
     }
     t := TouchArea {
         mouse-cursor: pointer;
@@ -380,19 +540,21 @@ component IconButton inherits Rectangle {
     }
 }
 
+// .item in ContextMenu.svelte; the check mark is for the sort and filter lists.
 component MenuRow inherits Rectangle {
     in property <string> text;
     in property <bool> danger;
     in property <bool> checked;
+    in property <bool> show-check;
     callback clicked;
-    height: 28px;
-    border-radius: 6px;
-    background: t.has-hover ? Theme.surface-4 : transparent;
+    height: 30px;
+    border-radius: 7px;
+    background: t.has-hover ? (root.danger ? Theme.danger.with-alpha(0.16) : Accent.soft) : transparent;
     HorizontalLayout {
         padding-left: 10px;
         padding-right: 10px;
         spacing: 6px;
-        Text {
+        if root.show-check: Text {
             width: 12px;
             text: root.checked ? "✓" : "";
             color: Theme.accent;
@@ -413,6 +575,62 @@ component MenuRow inherits Rectangle {
     }
 }
 
+// .menu: the glass panel every popup list sits on.
+component MenuPanel inherits Rectangle {
+    border-radius: 10px;
+    background: Theme.surface-3.with-alpha(Theme.surface-3.alpha / 255 * 0.88);
+    border-width: 1px;
+    border-color: Theme.border-2;
+    drop-shadow-color: #0000008c;
+    drop-shadow-blur: 30px;
+    drop-shadow-offset-y: 10px;
+}
+
+// .banner in Popup.svelte: a pill floating over the top of the window.
+component Banner inherits Rectangle {
+    in property <string> text;
+    in property <color> tint;
+    callback dismiss;
+    height: 36px;
+    width: min(row.preferred-width + 28px, 640px);
+    border-radius: 10px;
+    background: root.tint;
+    drop-shadow-color: #00000059;
+    drop-shadow-blur: 24px;
+    drop-shadow-offset-y: 6px;
+    row := HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        spacing: 12px;
+        Text {
+            text: root.text;
+            color: #0b0d10;
+            font-size: 13px;
+            font-weight: 600;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+        Rectangle {
+            y: (parent.height - self.height) / 2;
+            height: 22px;
+            width: d.preferred-width + 20px;
+            border-radius: 6px;
+            background: #0000002e;
+            d := Text {
+                text: I18n.tr("popup.dismiss", I18n.revision);
+                color: #0b0d10;
+                font-size: 13px;
+                font-weight: 600;
+            }
+            TouchArea {
+                clicked => {
+                    root.dismiss();
+                }
+            }
+        }
+    }
+}
+
 export component PopupWindow inherits Window {
     title: "Rebuffer";
     no-frame: true;
@@ -420,7 +638,8 @@ export component PopupWindow inherits Window {
     background: Theme.bg-0;
     preferred-width: 780px;
     preferred-height: 620px;
-    default-font-size: 12px;
+    default-font-size: 13px;
+    default-font-family: "Segoe UI Variable Text";
 
     in property <bool> drag-bar;
     in property <[TabData]> tabs;
@@ -430,6 +649,8 @@ export component PopupWindow inherits Window {
     in property <[string]> sort-options;
     in property <int> sort-index;
     in property <string> filter-label;
+    in property <string> sort-widest;
+    in property <string> filter-widest;
     in property <[FilterEntry]> filter-entries;
     in property <string> banner;
     in property <bool> banner-is-error;
@@ -444,6 +665,8 @@ export component PopupWindow inherits Window {
     out property <length> list-height: list.visible-height;
     property <length> menu-x;
     property <length> menu-y;
+    property <length> sort-x;
+    property <length> filter-x;
 
     callback search(string);
     callback select-tab(int);
@@ -483,9 +706,9 @@ export component PopupWindow inherits Window {
         rename-input.select-all();
     }
 
+    // .popup's background is --bg (bg-1, translucent) over the window.
     Rectangle {
-        border-width: 1px;
-        border-color: Theme.window-border;
+        background: Theme.bg-1;
     }
 
     VerticalLayout {
@@ -500,148 +723,225 @@ export component PopupWindow inherits Window {
             }
         }
 
-        if root.banner != "": Rectangle {
-            height: 34px;
-            background: root.banner-is-error ? Theme.danger.with-alpha(0.18) : Theme.warn.with-alpha(0.18);
-            HorizontalLayout {
-                padding-left: 12px;
-                padding-right: 8px;
-                spacing: 8px;
-                Text {
-                    text: root.banner;
-                    color: Theme.text-1;
-                    font-size: 11px;
-                    vertical-alignment: center;
-                    overflow: elide;
-                    horizontal-stretch: 1;
-                }
-                IconButton {
-                    y: 2px;
-                    text: I18n.tr("popup.dismiss", I18n.revision);
-                    clicked => {
-                        root.dismiss-banner();
-                    }
-                }
-            }
-        }
-
-        // Toolbar, in the WebView order: add, search, sort, filter. Mirrored
-        // for right-to-left by placing the buttons on the other side; the
-        // search field itself exists once, because functions reach it by id.
-        HorizontalLayout {
+        // .header: padding 10px 12px 0, gap 8px; the toolbar is add, search,
+        // sort, filter. Mirrored for right-to-left by placing the buttons on
+        // the other side; the search field exists once, since functions reach
+        // it by id.
+        VerticalLayout {
             padding-left: 12px;
             padding-right: 12px;
             padding-top: 10px;
             spacing: 8px;
-            if !I18n.rtl: IconButton {
-                text: "+ " + I18n.tr("toolbar.add", I18n.revision);
-                clicked => {
-                    root.add-files();
-                }
-            }
-            if I18n.rtl: IconButton {
-                text: root.filter-label + " ▾";
-                clicked => {
-                    filter-menu.show();
-                }
-            }
-            if I18n.rtl: IconButton {
-                text: root.sort-label + " ▾";
-                clicked => {
-                    sort-menu.show();
-                }
-            }
-            Rectangle {
-                horizontal-stretch: 1;
+
+            HorizontalLayout {
+                spacing: 8px;
                 height: 30px;
-                border-radius: 8px;
-                background: Theme.surface-2;
-                border-width: 1px;
-                border-color: search.has-focus ? Theme.accent : Theme.border-1;
-                search := TextInput {
-                    x: 10px;
-                    width: parent.width - 20px;
-                    color: Theme.text-1;
-                    selection-background-color: Theme.accent.with-alpha(0.4);
-                    font-size: 12px;
-                    vertical-alignment: center;
-                    single-line: true;
-                    horizontal-alignment: I18n.rtl ? right : left;
-                    edited => {
-                        root.search(self.text);
+
+                if !I18n.rtl: add-ltr := Rectangle {
+                    width: add-row.preferred-width + 28px;
+                    border-radius: 7px;
+                    background: Theme.accent;
+                    opacity: add-t.has-hover ? 0.9 : 1;
+                    add-row := HorizontalLayout {
+                        x: 14px;
+                        spacing: 6px;
+                        Path {
+                            y: (parent.height - self.height) / 2;
+                            width: 10px;
+                            height: 10px;
+                            viewbox-width: 12;
+                            viewbox-height: 12;
+                            commands: "M6 1v10M1 6h10";
+                            stroke: Theme.on-accent;
+                            stroke-width: 1.5px;
+                        }
+                        Text {
+                            text: I18n.tr("toolbar.add", I18n.revision);
+                            color: Theme.on-accent;
+                            font-size: 12px;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                        }
+                    }
+                    add-t := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.add-files();
+                        }
                     }
                 }
-                if search.text == "": Text {
-                    x: 10px;
-                    width: parent.width - 20px;
-                    text: I18n.tr("toolbar.search", I18n.revision);
-                    color: Theme.text-3;
-                    font-size: 12px;
-                    vertical-alignment: center;
-                    horizontal-alignment: I18n.rtl ? right : left;
+                if I18n.rtl: SelectBox {
+                    text: root.filter-label;
+                    widest: root.filter-widest;
+                    clicked => {
+                        root.filter-x = 12px;
+                        filter-menu.show();
+                    }
+                }
+                if I18n.rtl: SelectBox {
+                    text: root.sort-label;
+                    widest: root.sort-widest;
+                    clicked => {
+                        root.sort-x = 12px;
+                        sort-menu.show();
+                    }
+                }
+
+                // .search: padding 7px 12px 7px 30px with the magnifier at 10px.
+                Rectangle {
+                    horizontal-stretch: 1;
+                    border-radius: 7px;
+                    background: search.has-focus ? Theme.surface-2 : search-t.has-hover ? Theme.surface-4 : Theme.surface-2;
+                    border-width: 1px;
+                    border-color: search.has-focus ? Theme.accent : Theme.border-1;
+                    search-t := TouchArea {
+                        mouse-cursor: text;
+                        clicked => {
+                            search.focus();
+                        }
+                    }
+                    Path {
+                        x: I18n.rtl ? parent.width - 10px - 13px : 10px;
+                        width: 13px;
+                        height: 13px;
+                        viewbox-width: 24;
+                        viewbox-height: 24;
+                        commands: "M17.5 11A6.5 6.5 0 1 1 4.5 11A6.5 6.5 0 1 1 17.5 11ZM20 20l-4.2-4.2";
+                        stroke: Theme.text-3;
+                        stroke-width: 1.1px;
+                        fill: transparent;
+                    }
+                    search := TextInput {
+                        x: I18n.rtl ? 12px : 30px;
+                        width: parent.width - 42px;
+                        color: Theme.text-1;
+                        selection-background-color: Accent.soft;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                        single-line: true;
+                        horizontal-alignment: I18n.rtl ? right : left;
+                        edited => {
+                            root.search(self.text);
+                        }
+                    }
+                    if search.text == "": Text {
+                        x: search.x;
+                        width: search.width;
+                        text: I18n.tr("toolbar.search", I18n.revision);
+                        color: Theme.text-3;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                        horizontal-alignment: I18n.rtl ? right : left;
+                    }
+                }
+
+                if !I18n.rtl: sort-ltr := SelectBox {
+                    text: root.sort-label;
+                    widest: root.sort-widest;
+                    clicked => {
+                        root.sort-x = self.x;
+                        sort-menu.show();
+                    }
+                }
+                if !I18n.rtl: SelectBox {
+                    text: root.filter-label;
+                    widest: root.filter-widest;
+                    clicked => {
+                        root.filter-x = self.x;
+                        filter-menu.show();
+                    }
+                }
+                if I18n.rtl: Rectangle {
+                    width: add-row-rtl.preferred-width + 28px;
+                    border-radius: 7px;
+                    background: Theme.accent;
+                    opacity: add-t-rtl.has-hover ? 0.9 : 1;
+                    add-row-rtl := HorizontalLayout {
+                        x: 14px;
+                        spacing: 6px;
+                        Text {
+                            text: I18n.tr("toolbar.add", I18n.revision);
+                            color: Theme.on-accent;
+                            font-size: 12px;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                        }
+                        Path {
+                            y: (parent.height - self.height) / 2;
+                            width: 10px;
+                            height: 10px;
+                            viewbox-width: 12;
+                            viewbox-height: 12;
+                            commands: "M6 1v10M1 6h10";
+                            stroke: Theme.on-accent;
+                            stroke-width: 1.5px;
+                        }
+                    }
+                    add-t-rtl := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.add-files();
+                        }
+                    }
                 }
             }
-            if !I18n.rtl: IconButton {
-                text: root.sort-label + " ▾";
-                clicked => {
-                    sort-menu.show();
-                }
-            }
-            if !I18n.rtl: IconButton {
-                text: root.filter-label + " ▾";
-                clicked => {
-                    filter-menu.show();
-                }
-            }
-            if I18n.rtl: IconButton {
-                text: "+ " + I18n.tr("toolbar.add", I18n.revision);
-                clicked => {
-                    root.add-files();
+
+            // .tabs: gap 2px.
+            HorizontalLayout {
+                spacing: 2px;
+                alignment: I18n.rtl ? end : start;
+                for tab in root.tabs: Tab {
+                    text: tab.label;
+                    count: tab.count;
+                    active: tab.active;
+                    clicked => {
+                        root.select-tab(tab.index);
+                    }
                 }
             }
         }
 
-        // Tabs.
-        HorizontalLayout {
-            padding-left: 12px;
-            padding-right: 12px;
-            padding-top: 8px;
-            padding-bottom: 4px;
-            spacing: 6px;
-            alignment: I18n.rtl ? end : start;
-            for tab in root.tabs: Chip {
-                text: tab.label;
-                count: tab.count;
-                active: tab.active;
-                clicked => {
-                    root.select-tab(tab.index);
-                }
-            }
-        }
-
-        // The grid.
+        // .grid-viewport: padding 4px 12px 8px; the grid adds --grid-pad.
         Rectangle {
             vertical-stretch: 1;
             list := ListView {
+                x: 12px;
+                y: 4px;
+                width: parent.width - 24px;
+                height: parent.height - 12px;
                 for row in root.rows: VerticalLayout {
-                    padding-left: Layout.pad;
-                    padding-right: Layout.pad;
-                    if row.header != "": Rectangle {
+                    padding-top: row.first ? Layout.pad : 0;
+                    // .group-header: a pill chip, 4px in from the grid edge.
+                    if row.header != "": HorizontalLayout {
                         height: Layout.header-h;
-                        Text {
-                            x: 2px;
-                            width: parent.width - 4px;
-                            text: row.header;
-                            color: Theme.text-2;
-                            font-size: 11px;
-                            font-weight: 600;
-                            vertical-alignment: center;
-                            horizontal-alignment: I18n.rtl ? right : left;
+                        padding-left: 4px;
+                        padding-right: 4px;
+                        alignment: I18n.rtl ? end : start;
+                        Rectangle {
+                            y: (parent.height - self.height) / 2;
+                            height: chip.preferred-height + 8px;
+                            width: chip.preferred-width + 24px;
+                            border-radius: self.height / 2;
+                            background: Theme.surface-3.with-alpha(Theme.surface-3.alpha / 255 * 0.88);
+                            border-width: 1px;
+                            border-color: Theme.border-2;
+                            drop-shadow-color: #00000059;
+                            drop-shadow-blur: 2px;
+                            drop-shadow-offset-y: 1px;
+                            chip := Text {
+                                text: row.header;
+                                color: Theme.text-2;
+                                font-size: 11px;
+                                font-weight: 600;
+                                letter-spacing: 0.55px;
+                            }
                         }
                     }
                     if row.header == "": HorizontalLayout {
-                        spacing: Layout.gap;
+                        padding-left: Layout.pad;
+                        padding-right: Layout.pad;
                         padding-bottom: Layout.gap;
+                        spacing: Layout.gap;
                         alignment: I18n.rtl ? end : start;
                         for card in row.cards: Card {
                             data: card;
@@ -663,88 +963,181 @@ export component PopupWindow inherits Window {
                     }
                 }
             }
-            if root.empty: VerticalLayout {
-                alignment: center;
-                spacing: 6px;
-                Text {
-                    text: root.empty-title;
-                    color: Theme.text-1;
-                    font-size: 15px;
-                    font-weight: 600;
-                    horizontal-alignment: center;
-                }
-                Text {
-                    text: root.empty-body;
-                    color: Theme.text-2;
-                    font-size: 12px;
-                    horizontal-alignment: center;
-                    wrap: word-wrap;
-                }
-            }
-        }
 
-        // Footer: status, settings, zoom; mirrored for right-to-left.
-        HorizontalLayout {
-            height: 34px;
-            padding-left: 14px;
-            padding-right: 12px;
-            spacing: 10px;
-            if I18n.rtl: HorizontalLayout {
-                spacing: 4px;
-                for step in [1, 2, 3, 4, 5]: Rectangle {
-                    width: 16px;
-                    height: 34px;
-                    Rectangle {
-                        width: 4px + step * 1.6px;
-                        height: self.width;
-                        border-radius: self.width / 2;
-                        background: step <= root.zoom ? Theme.accent : Theme.border-3;
+            // .empty: a soft accent glow behind the title and the hint.
+            if root.empty: Rectangle {
+                Rectangle {
+                    width: 280px;
+                    height: 280px;
+                    border-radius: 140px;
+                    background: @radial-gradient(circle, Accent.soft 0%, transparent 65%);
+                    opacity: 0.7;
+                }
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 4px;
+                    padding: 32px;
+                    Text {
+                        text: root.empty-title;
+                        color: Theme.text-2;
+                        font-size: 15px;
+                        font-weight: 600;
+                        horizontal-alignment: center;
                     }
-                    TouchArea {
-                        mouse-cursor: pointer;
-                        clicked => {
-                            root.zoom-to(step);
+                    HorizontalLayout {
+                        alignment: center;
+                        Text {
+                            width: min(self.preferred-width, 320px);
+                            text: root.empty-body;
+                            color: Theme.text-3;
+                            font-size: 12px;
+                            horizontal-alignment: center;
+                            wrap: word-wrap;
                         }
                     }
                 }
             }
-            if I18n.rtl: IconButton {
-                y: 2px;
-                text: "⚙";
-                clicked => {
-                    root.open-settings();
-                }
-            }
-            Text {
-                text: root.status;
-                color: Theme.text-3;
-                font-size: 11px;
-                vertical-alignment: center;
-                horizontal-stretch: 1;
-                horizontal-alignment: I18n.rtl ? right : left;
-            }
-            if !I18n.rtl: IconButton {
-                y: 2px;
-                text: "⚙";
-                clicked => {
-                    root.open-settings();
-                }
-            }
-            if !I18n.rtl: HorizontalLayout {
-                spacing: 4px;
-                for step in [1, 2, 3, 4, 5]: Rectangle {
-                    width: 16px;
-                    height: 34px;
-                    Rectangle {
-                        width: 4px + step * 1.6px;
-                        height: self.width;
-                        border-radius: self.width / 2;
-                        background: step <= root.zoom ? Theme.accent : Theme.border-3;
+        }
+
+        // .footer: padding 6px 12px, a hairline above; the status on one side,
+        // the settings gear and the zoom dial on the other.
+        Rectangle {
+            height: 1px;
+            background: Theme.border-1;
+        }
+        HorizontalLayout {
+            padding-left: 12px;
+            padding-right: 12px;
+            padding-top: 6px;
+            padding-bottom: 6px;
+            spacing: 12px;
+
+            if I18n.rtl: corner-rtl := HorizontalLayout {
+                spacing: 8px;
+                dial-rtl := Rectangle {
+                    width: 17px;
+                    height: 63px;
+                    y: (parent.height - self.height) / 2;
+                    border-radius: self.width / 2;
+                    background: dial-rtl-t.has-hover ? Theme.surface-4 : Theme.surface-2;
+                    border-width: 1px;
+                    border-color: Theme.border-1;
+                    for step in [5, 4, 3, 2, 1]: Rectangle {
+                        x: 5px;
+                        y: 8px + (5 - step) * 10px;
+                        width: 5px;
+                        height: 5px;
+                        border-radius: 2.5px;
+                        background: Theme.accent;
+                        opacity: step <= root.zoom ? 1 : 0.22;
                     }
-                    TouchArea {
+                    dial-rtl-t := TouchArea {
+                        mouse-cursor: ns-resize;
+                        clicked => {
+                            root.zoom-to(5 - floor((self.mouse-y - 4px) / 10px));
+                        }
+                        scroll-event(e) => {
+                            root.zoom-to(e.delta-y > 0 ? root.zoom + 1 : root.zoom - 1);
+                            accept
+                        }
+                    }
+                }
+                Rectangle {
+                    y: (parent.height - self.height) / 2;
+                    width: 46px;
+                    height: 46px;
+                    border-radius: 10px;
+                    background: gear-rtl-t.has-hover ? Accent.soft : transparent;
+                    Path {
+                        width: 32px;
+                        height: 32px;
+                        viewbox-width: 24;
+                        viewbox-height: 24;
+                        commands: "M9.94 3.75 L9.82 0.23 L14.18 0.23 L14.06 3.75 A8.50 8.50 0 0 1 16.38 4.71 L18.78 2.14 L21.86 5.22 L19.29 7.62 A8.50 8.50 0 0 1 20.25 9.94 L23.77 9.82 L23.77 14.18 L20.25 14.06 A8.50 8.50 0 0 1 19.29 16.38 L21.86 18.78 L18.78 21.86 L16.38 19.29 A8.50 8.50 0 0 1 14.06 20.25 L14.18 23.77 L9.82 23.77 L9.94 20.25 A8.50 8.50 0 0 1 7.62 19.29 L5.22 21.86 L2.14 18.78 L4.71 16.38 A8.50 8.50 0 0 1 3.75 14.06 L0.23 14.18 L0.23 9.82 L3.75 9.94 A8.50 8.50 0 0 1 4.71 7.62 L2.14 5.22 L5.22 2.14 L7.62 4.71 Z M16.09 12.00 A4.09 4.09 0 1 0 7.91 12.00 A4.09 4.09 0 1 0 16.09 12.00 Z";
+                        fill: gear-rtl-t.has-hover ? Accent.strong : Theme.accent;
+                    }
+                    gear-rtl-t := TouchArea {
                         mouse-cursor: pointer;
                         clicked => {
-                            root.zoom-to(step);
+                            root.open-settings();
+                        }
+                    }
+                }
+            }
+
+            // .status (StatusBar.svelte): padding 6px 16px, its own hairline
+            // and a faint surface.
+            HorizontalLayout {
+                horizontal-stretch: 1;
+                alignment: I18n.rtl ? end : start;
+                Rectangle {
+                    y: (parent.height - self.height) / 2;
+                    height: status-text.preferred-height + 13px;
+                    width: status-text.preferred-width + 32px;
+                    background: Theme.surface-1.with-alpha(Theme.surface-1.alpha / 255 * 0.45);
+                    Rectangle {
+                        y: 0;
+                        height: 1px;
+                        background: Theme.border-1;
+                    }
+                    status-text := Text {
+                        text: root.status;
+                        color: Theme.text-3;
+                        font-size: 11px;
+                    }
+                }
+            }
+
+            if !I18n.rtl: HorizontalLayout {
+                spacing: 8px;
+                Rectangle {
+                    y: (parent.height - self.height) / 2;
+                    width: 46px;
+                    height: 46px;
+                    border-radius: 10px;
+                    background: gear-t.has-hover ? Accent.soft : transparent;
+                    Path {
+                        width: 32px;
+                        height: 32px;
+                        viewbox-width: 24;
+                        viewbox-height: 24;
+                        commands: "M9.94 3.75 L9.82 0.23 L14.18 0.23 L14.06 3.75 A8.50 8.50 0 0 1 16.38 4.71 L18.78 2.14 L21.86 5.22 L19.29 7.62 A8.50 8.50 0 0 1 20.25 9.94 L23.77 9.82 L23.77 14.18 L20.25 14.06 A8.50 8.50 0 0 1 19.29 16.38 L21.86 18.78 L18.78 21.86 L16.38 19.29 A8.50 8.50 0 0 1 14.06 20.25 L14.18 23.77 L9.82 23.77 L9.94 20.25 A8.50 8.50 0 0 1 7.62 19.29 L5.22 21.86 L2.14 18.78 L4.71 16.38 A8.50 8.50 0 0 1 3.75 14.06 L0.23 14.18 L0.23 9.82 L3.75 9.94 A8.50 8.50 0 0 1 4.71 7.62 L2.14 5.22 L5.22 2.14 L7.62 4.71 Z M16.09 12.00 A4.09 4.09 0 1 0 7.91 12.00 A4.09 4.09 0 1 0 16.09 12.00 Z";
+                        fill: gear-t.has-hover ? Accent.strong : Theme.accent;
+                    }
+                    gear-t := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.open-settings();
+                        }
+                    }
+                }
+                // .dial (ZoomDial.svelte): a vertical pill of five dots that
+                // fills from the bottom like a level meter.
+                Rectangle {
+                    width: 17px;
+                    height: 63px;
+                    y: (parent.height - self.height) / 2;
+                    border-radius: self.width / 2;
+                    background: dial-t.has-hover ? Theme.surface-4 : Theme.surface-2;
+                    border-width: 1px;
+                    border-color: Theme.border-1;
+                    for step in [5, 4, 3, 2, 1]: Rectangle {
+                        x: 5px;
+                        y: 8px + (5 - step) * 10px;
+                        width: 5px;
+                        height: 5px;
+                        border-radius: 2.5px;
+                        background: Theme.accent;
+                        opacity: step <= root.zoom ? 1 : 0.22;
+                    }
+                    dial-t := TouchArea {
+                        mouse-cursor: ns-resize;
+                        clicked => {
+                            root.zoom-to(5 - floor((self.mouse-y - 4px) / 10px));
+                        }
+                        scroll-event(e) => {
+                            root.zoom-to(e.delta-y > 0 ? root.zoom + 1 : root.zoom - 1);
+                            accept
                         }
                     }
                 }
@@ -752,54 +1145,105 @@ export component PopupWindow inherits Window {
         }
     }
 
-    // Rename dialog. Always present, shown by `visible`: its input has to be
-    // reachable from focus-rename(), which an `if` would not allow.
+    // .banner: fixed at the top centre; the error one sits lower.
+    if root.banner != "": Banner {
+        x: (parent.width - self.width) / 2;
+        y: root.banner-is-error ? 56px : 10px;
+        text: root.banner;
+        tint: root.banner-is-error ? #f7768e : Theme.accent;
+        dismiss => {
+            root.dismiss-banner();
+        }
+    }
+
+    // 1px inner glass border (global.css body::before), above everything.
+    Rectangle {
+        border-width: 1px;
+        border-color: Theme.window-border;
+    }
+
+    // .rename-overlay. Always present, shown by `visible`: its input has to
+    // be reachable from focus-rename(), which an `if` would not allow.
     Rectangle {
         visible: root.renaming;
-        background: Theme.scrim-1;
+        background: #05060873;
         TouchArea {}
         Rectangle {
-            width: 340px;
-            height: 104px;
-            border-radius: 12px;
-            background: Theme.surface-3;
+            width: 352px;
+            height: 112px;
+            border-radius: 14px;
+            background: Theme.surface-1;
             border-width: 1px;
-            border-color: Theme.border-2;
+            border-color: Theme.border-1;
+            drop-shadow-color: #00000080;
+            drop-shadow-blur: 40px;
+            drop-shadow-offset-y: 12px;
             VerticalLayout {
-                padding: 14px;
+                padding: 16px;
                 spacing: 10px;
                 Rectangle {
-                    height: 30px;
+                    height: 36px;
                     border-radius: 8px;
-                    background: Theme.bg-0;
+                    background: Theme.surface-2;
                     border-width: 1px;
-                    border-color: Theme.accent;
+                    border-color: rename-input.has-focus ? Theme.accent : Theme.border-1;
                     rename-input := TextInput {
-                        x: 8px;
-                        width: parent.width - 16px;
+                        x: 10px;
+                        width: parent.width - 20px;
                         text <=> root.rename-text;
                         color: Theme.text-1;
-                        font-size: 12px;
+                        font-size: 13px;
                         vertical-alignment: center;
                         single-line: true;
                         accepted => {
                             root.rename-commit(self.text);
                         }
                     }
+                    if root.rename-text == "": Text {
+                        x: 10px;
+                        text: I18n.tr("popup.displayTitle", I18n.revision);
+                        color: Theme.text-3;
+                        font-size: 13px;
+                        vertical-alignment: center;
+                    }
                 }
                 HorizontalLayout {
                     alignment: end;
                     spacing: 8px;
-                    IconButton {
-                        text: I18n.tr("popup.cancel", I18n.revision);
-                        clicked => {
-                            root.renaming = false;
+                    Rectangle {
+                        height: 30px;
+                        width: ok.preferred-width + 28px;
+                        border-radius: 8px;
+                        background: Theme.accent;
+                        ok := Text {
+                            text: I18n.tr("popup.rename", I18n.revision);
+                            color: #0b0d10;
+                            font-size: 13px;
+                            font-weight: 600;
+                        }
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                root.rename-commit(root.rename-text);
+                            }
                         }
                     }
-                    IconButton {
-                        text: I18n.tr("popup.rename", I18n.revision);
-                        clicked => {
-                            root.rename-commit(root.rename-text);
+                    Rectangle {
+                        height: 30px;
+                        width: cancel.preferred-width + 28px;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: Theme.border-1;
+                        cancel := Text {
+                            text: I18n.tr("popup.cancel", I18n.revision);
+                            color: Theme.text-1;
+                            font-size: 13px;
+                        }
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                root.renaming = false;
+                            }
                         }
                     }
                 }
@@ -808,18 +1252,15 @@ export component PopupWindow inherits Window {
     }
 
     sort-menu := PopupWindow {
-        x: I18n.rtl ? 12px : root.width - 260px;
-        y: 44px;
+        x: I18n.rtl ? root.sort-x : min(root.sort-x, root.width - 222px);
+        y: 76px;
         width: 210px;
-        Rectangle {
-            border-radius: 10px;
-            background: Theme.surface-3;
-            border-width: 1px;
-            border-color: Theme.border-2;
+        MenuPanel {
             VerticalLayout {
-                padding: 4px;
+                padding: 5px;
                 for option[i] in root.sort-options: MenuRow {
                     text: option;
+                    show-check: true;
                     checked: i == root.sort-index;
                     clicked => {
                         root.sort(i);
@@ -830,27 +1271,25 @@ export component PopupWindow inherits Window {
     }
 
     filter-menu := PopupWindow {
-        x: I18n.rtl ? 12px : root.width - 230px;
-        y: 44px;
-        width: 200px;
-        Rectangle {
-            border-radius: 10px;
-            background: Theme.surface-3;
-            border-width: 1px;
-            border-color: Theme.border-2;
+        x: I18n.rtl ? root.filter-x : min(root.filter-x, root.width - 222px);
+        y: 76px;
+        width: 210px;
+        MenuPanel {
             VerticalLayout {
-                padding: 4px;
+                padding: 5px;
                 for entry in root.filter-entries: VerticalLayout {
                     if entry.header: Text {
                         height: 24px;
+                        x: 10px;
                         text: entry.label;
                         color: Theme.text-3;
-                        font-size: 10px;
+                        font-size: 11px;
                         font-weight: 600;
                         vertical-alignment: center;
                     }
                     if !entry.header: MenuRow {
                         text: entry.label;
+                        show-check: true;
                         checked: entry.checked;
                         clicked => {
                             root.filter(entry.key);
@@ -861,33 +1300,29 @@ export component PopupWindow inherits Window {
         }
     }
 
+    // ContextMenu.svelte: .menu with .item rows; a link's address leads it
+    // (the WebView popup hung it over the card as a plaque).
     menu := PopupWindow {
         x: min(root.menu-x, root.width - 214px);
-        y: min(root.menu-y, root.height - root.menu-entries.length * 30px - 12px);
-        width: 200px;
-        Rectangle {
-            border-radius: 10px;
-            background: Theme.surface-3;
-            border-width: 1px;
-            border-color: Theme.border-2;
+        y: min(root.menu-y, root.height - root.menu-entries.length * 30px - 70px);
+        width: 210px;
+        MenuPanel {
             VerticalLayout {
-                padding: 4px;
+                padding: 5px;
                 for entry in root.menu-entries: VerticalLayout {
-                    if entry.separator-before: Rectangle {
-                        height: 7px;
-                        Rectangle {
-                            height: 1px;
-                            background: Theme.border-1;
+                    if entry.header: Rectangle {
+                        height: url.preferred-height + 14px;
+                        url := Text {
+                            x: 10px;
+                            width: parent.width - 20px;
+                            text: entry.label;
+                            color: Theme.text-1;
+                            font-family: "Cascadia Mono";
+                            font-size: 11px;
+                            wrap: word-wrap;
+                            overflow: elide;
+                            max-height: 80px;
                         }
-                    }
-                    if entry.header: Text {
-                        width: 184px;
-                        text: entry.label;
-                        color: Theme.text-2;
-                        font-size: 10px;
-                        wrap: word-wrap;
-                        max-height: 52px;
-                        overflow: elide;
                     }
                     if !entry.header: MenuRow {
                         text: entry.label;
