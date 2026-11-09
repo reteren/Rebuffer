@@ -603,10 +603,12 @@ component MenuRow inherits Rectangle {
     }
 }
 
-// .menu: the glass panel every popup list sits on.
+// .menu: the glass panel every popup list sits on. The WebView blurred what
+// lay under it; without a backdrop blur, the glass is painted opaque in the
+// color it averaged to (surface-3 at 88% over the window, theme.rs).
 component MenuPanel inherits Rectangle {
     border-radius: 10px;
-    background: Theme.surface-3.with-alpha(Theme.surface-3.alpha / 255 * 0.88);
+    background: Theme.menu-bg;
     border-width: 1px;
     border-color: Theme.border-2;
     drop-shadow-color: #0000008c;
@@ -668,6 +670,9 @@ export component PopupWindow inherits Window {
     preferred-height: 620px;
     default-font-size: 13px;
     default-font-family: "Segoe UI Variable Text";
+    // Chromium draws Segoe UI with ClearType, which reads heavier than the
+    // grayscale coverage here; 450 on the variable font evens it out.
+    default-font-weight: 450;
 
     in property <bool> drag-bar;
     in property <[TabData]> tabs;
@@ -727,6 +732,20 @@ export component PopupWindow inherits Window {
 
     public function open-menu() {
         menu.show();
+    }
+
+    // For --snapshot --menu: the menus a click would open, at `x` (and `y`).
+    public function open-for-snapshot(which: string, x: length, y: length) {
+        if (which == "sort") {
+            root.sort-x = x;
+            sort-menu.show();
+        } else if (which == "filter") {
+            root.filter-x = x;
+            filter-menu.show();
+        } else {
+            root.menu-x = x;
+            root.menu-y = y;
+        }
     }
 
     public function focus-rename() {
@@ -1331,9 +1350,10 @@ export component PopupWindow inherits Window {
     // ContextMenu.svelte: .menu with .item rows; a link's address leads it
     // (the WebView popup hung it over the card as a plaque).
     menu := PopupWindow {
-        x: min(root.menu-x, root.width - 214px);
+        x: min(root.menu-x, root.width - 204px);
         y: min(root.menu-y, root.height - root.menu-entries.length * 30px - 70px);
-        width: 210px;
+        // .menu { min-width: 200px }
+        width: 200px;
         MenuPanel {
             VerticalLayout {
                 padding: 5px;

@@ -113,6 +113,11 @@ where
     }
     let window = over(theme.get_bg_1(), theme.get_bg_0());
     theme.set_window_base(window);
+    let glass = theme.get_surface_3();
+    theme.set_menu_bg(over(
+        glass.with_alpha(f32::from(glass.alpha()) / 255.0 * 0.88),
+        window,
+    ));
     set_controls(&theme, css_of(name).contains("color-scheme: light"));
     theme.set_card_corner(over(theme.get_surface_1(), window));
 }

@@ -480,6 +480,22 @@ pub fn snapshot(spec: crate::Snapshot) {
             p.reflow();
         });
     });
+    if let Some(menu) = spec.menu.clone() {
+        slint::Timer::single_shot(Duration::from_millis(1500), move || {
+            with(|p| match menu.as_str() {
+                "sort" => p.ui.invoke_open_for_snapshot("sort".into(), 762.0, 0.0),
+                "filter" => p.ui.invoke_open_for_snapshot("filter".into(), 889.0, 0.0),
+                _ => {
+                    // The second card of the first row, as a right-click there.
+                    let id = p.view.borrow().items.get(1).map(|i| i.id);
+                    if let Some(id) = id {
+                        p.ui.invoke_open_for_snapshot("card".into(), 300.0, 230.0);
+                        p.open_menu(id);
+                    }
+                }
+            });
+        });
+    }
     // Long enough for the visible thumbnails to decode.
     slint::Timer::single_shot(Duration::from_millis(2500), move || {
         with(|p| match p.ui.window().take_snapshot() {

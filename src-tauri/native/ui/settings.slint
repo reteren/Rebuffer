@@ -617,6 +617,9 @@ export component SettingsWindow inherits Window {
     min-height: 480px;
     default-font-size: 13px;
     default-font-family: "Segoe UI Variable Text";
+    // Chromium draws Segoe UI with ClearType, which reads heavier than the
+    // grayscale coverage here; 450 on the variable font evens it out.
+    default-font-weight: 450;
 
     in property <SettingsData> data;
     // The theme tiles, one strip; split in two only for historical reasons.

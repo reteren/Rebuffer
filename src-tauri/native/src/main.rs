@@ -40,6 +40,8 @@ pub struct Snapshot {
     pub window: Option<String>,
     /// Settings section to open, 0-5; for the popup, the tab.
     pub section: i32,
+    /// `sort`, `filter` or `card`: a popup menu to open first.
+    pub menu: Option<String>,
 }
 
 fn snapshot_args() -> Option<Snapshot> {
@@ -56,6 +58,7 @@ fn snapshot_args() -> Option<Snapshot> {
         lang: value("--lang"),
         window: value("--window"),
         section: value("--section").and_then(|s| s.parse().ok()).unwrap_or(0),
+        menu: value("--menu"),
     })
 }
 
