@@ -1,4 +1,5 @@
-//! Themes, read from the same CSS files the WebView front end uses.
+//! Themes, from the CSS files in `themes/` — the WebView front end's theme
+//! files, carried over unchanged.
 //!
 //! Each file declares `--token: value;` pairs under `[data-theme="<name>"]`.
 //! Only plain colors are taken (`#rgb`, `#rrggbb`, `rgba(r, g, b, a)`);
@@ -10,50 +11,17 @@ use slint::{Color, ComponentHandle};
 use crate::ui::{Theme, ThemeSwatch};
 
 const FILES: &[(&str, &str)] = &[
-    (
-        "darkblue",
-        include_str!("../../../src/lib/styles/themes/darkblue.css"),
-    ),
-    (
-        "black",
-        include_str!("../../../src/lib/styles/themes/black.css"),
-    ),
-    (
-        "dark-green",
-        include_str!("../../../src/lib/styles/themes/dark-green.css"),
-    ),
-    (
-        "dark-purple",
-        include_str!("../../../src/lib/styles/themes/dark-purple.css"),
-    ),
-    (
-        "ember",
-        include_str!("../../../src/lib/styles/themes/ember.css"),
-    ),
-    (
-        "grey",
-        include_str!("../../../src/lib/styles/themes/grey.css"),
-    ),
-    (
-        "light",
-        include_str!("../../../src/lib/styles/themes/light.css"),
-    ),
-    (
-        "ocean",
-        include_str!("../../../src/lib/styles/themes/ocean.css"),
-    ),
-    (
-        "paper",
-        include_str!("../../../src/lib/styles/themes/paper.css"),
-    ),
-    (
-        "skyblue",
-        include_str!("../../../src/lib/styles/themes/skyblue.css"),
-    ),
-    (
-        "wine",
-        include_str!("../../../src/lib/styles/themes/wine.css"),
-    ),
+    ("darkblue", include_str!("../themes/darkblue.css")),
+    ("black", include_str!("../themes/black.css")),
+    ("dark-green", include_str!("../themes/dark-green.css")),
+    ("dark-purple", include_str!("../themes/dark-purple.css")),
+    ("ember", include_str!("../themes/ember.css")),
+    ("grey", include_str!("../themes/grey.css")),
+    ("light", include_str!("../themes/light.css")),
+    ("ocean", include_str!("../themes/ocean.css")),
+    ("paper", include_str!("../themes/paper.css")),
+    ("skyblue", include_str!("../themes/skyblue.css")),
+    ("wine", include_str!("../themes/wine.css")),
 ];
 
 /// Every `--token: <color>` in `css`, in file order.

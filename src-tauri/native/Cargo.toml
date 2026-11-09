@@ -1,16 +1,15 @@
 [package]
-name = "rebuffer-native"
-version = "0.1.0"
-description = "Rebuffer's native front end: Slint on top of rebuffer-core, no WebView"
+name = "rebuffer"
+# The shipping version, and its only home: every installer takes the next
+# unused one (tools/build_native_installer.py refuses to reuse a version).
+version = "1.2.2"
+description = "Persistent clipboard history for Windows"
 authors = ["reteren"]
 edition = "2021"
 publish = false
 
-# The version above is the crate's own; the shipping version still lives in
-# package.json, tauri.conf.json and ../Cargo.toml until this front end ships.
-
 [[bin]]
-name = "rebuffer-native"
+name = "rebuffer"
 path = "src/main.rs"
 
 [dependencies]
@@ -38,4 +37,3 @@ windows = { version = "0.61.3", features = ["Win32_Foundation", "Win32_System_Th
 
 [build-dependencies]
 slint-build = "1.18.1"
-serde_json = "1.0.151"

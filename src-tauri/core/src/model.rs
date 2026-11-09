@@ -1,5 +1,5 @@
-//! Shared domain types. These cross the IPC boundary, so every field name here
-//! has a twin in `src/lib/types.ts` — change one, change both.
+//! Shared domain types. Their serde names are also the on-disk and export
+//! format (settings, `.rbx` archives), so a rename is a format change.
 
 use serde::{Deserialize, Serialize};
 

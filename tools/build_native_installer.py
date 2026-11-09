@@ -1,4 +1,4 @@
-"""Builds the NSIS installer for the native (Slint) Rebuffer.
+"""Builds the Rebuffer NSIS installer.
 
     python tools/build_native_installer.py [--skip-build]
 
@@ -7,11 +7,10 @@ template, see the README next to it) for the native binary and runs makensis.
 The result lands where `tauri build` put its installers,
 src-tauri/target/release/bundle/nsis/Rebuffer_<version>_x64-setup.exe.
 
-The version is the shipping version, read from src-tauri/tauri.conf.json, and
-the script refuses to run unless package.json and src-tauri/Cargo.toml agree:
-every installer carries the next unused version, bumped in all three places.
-It also refuses to overwrite an installer that already exists under that
-version.
+The version is the shipping version, the `version` of
+src-tauri/native/Cargo.toml (its only home). Every installer carries the next
+unused version, so the script refuses to overwrite an installer that already
+exists under it.
 """
 
 from __future__ import annotations
@@ -39,13 +38,12 @@ NSIS_PLUGIN_DIR = Path(
 
 
 def shipping_version() -> str:
-    conf = json.loads((TAURI / "tauri.conf.json").read_text(encoding="utf-8"))["version"]
-    pkg = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
-    cargo = re.search(r'^version = "([^"]+)"', (TAURI / "Cargo.toml").read_text(encoding="utf-8"), re.M)
-    versions = {"tauri.conf.json": conf, "package.json": pkg, "Cargo.toml": cargo.group(1) if cargo else None}
-    if len(set(versions.values())) != 1:
-        sys.exit(f"version mismatch, bump all three places first: {versions}")
-    return conf
+    """The app crate's version: the only place the shipping version lives."""
+    manifest = (NATIVE / "Cargo.toml").read_text(encoding="utf-8")
+    m = re.search(r'^version = "([^"]+)"', manifest, re.M)
+    if not m:
+        sys.exit("no version in src-tauri/native/Cargo.toml")
+    return m.group(1)
 
 
 def render(template: str, values: dict[str, str], lists: dict[str, list[str]]) -> str:
@@ -95,15 +93,15 @@ def main() -> None:
 
     if not args.skip_build:
         subprocess.run(
-            ["cargo", "build", "--release", "-p", "rebuffer-native"], cwd=TAURI, check=True
+            ["cargo", "build", "--release", "-p", "rebuffer"], cwd=TAURI, check=True
         )
-    binary = TAURI / "target" / "release" / "rebuffer-native.exe"
+    binary = TAURI / "target" / "release" / "rebuffer.exe"
     if not binary.exists():
         sys.exit(f"{binary} not found; build it or drop --skip-build")
 
-    # Installed as rebuffer.exe: the name the WebView build installed, the Run
-    # key points at and the uninstaller removes. The template copies the file
-    # under its own name, so it is staged under that name first.
+    # Staged next to the template's include files: makensis runs there. The
+    # binary keeps the name the WebView build installed under, the one the Run
+    # key points at and the uninstaller removes.
     stage = TAURI / "target" / "release" / "native-installer"
     shutil.rmtree(stage, ignore_errors=True)
     stage.mkdir(parents=True)

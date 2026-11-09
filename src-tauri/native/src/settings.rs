@@ -87,9 +87,13 @@ pub fn open(core: Rc<Core>) {
     window.refresh();
     window.refresh_stats();
     window.refresh_win_v();
-    window
-        .ui
-        .set_version(tr_with("settings.version", &[("version", env!("REBUFFER_VERSION"))]).into());
+    window.ui.set_version(
+        tr_with(
+            "settings.version",
+            &[("version", env!("CARGO_PKG_VERSION"))],
+        )
+        .into(),
+    );
     if let Err(e) = window.ui.show() {
         tracing::error!("settings window did not show: {e}");
         return;
@@ -119,9 +123,13 @@ pub fn snapshot(core: Rc<Core>, spec: crate::Snapshot) {
     window.refresh();
     window.refresh_stats();
     window.refresh_win_v();
-    window
-        .ui
-        .set_version(tr_with("settings.version", &[("version", env!("REBUFFER_VERSION"))]).into());
+    window.ui.set_version(
+        tr_with(
+            "settings.version",
+            &[("version", env!("CARGO_PKG_VERSION"))],
+        )
+        .into(),
+    );
     if let Some(theme) = &spec.theme {
         crate::theme::apply(&window.ui, theme, "");
     }

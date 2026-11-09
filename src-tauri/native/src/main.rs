@@ -141,19 +141,19 @@ fn main() {
 const RUN_VALUE: &str = "Rebuffer";
 
 /// Keeps HKCU\...\Run in step with `behavior.launchOnStartup`, and heals it
-/// once at startup. Only the installed copy does this: it is the one named
-/// `rebuffer.exe`. A development build (`rebuffer-native.exe`) registering its
-/// own path would make Windows start a build directory at every logon.
+/// once at startup. Only an installed copy does this: a development build
+/// registering its own path would make Windows start a build directory at
+/// every logon.
 fn install_autostart_hook(core: &Core) {
+    // The installer puts uninstall.exe next to the binary; a build directory
+    // never has one. (The file name says nothing: the development build is
+    // rebuffer.exe too.)
     let installed = std::env::current_exe()
         .ok()
-        .and_then(|p| {
-            p.file_name()
-                .map(|n| n.eq_ignore_ascii_case("rebuffer.exe"))
-        })
+        .and_then(|p| p.parent().map(|dir| dir.join("uninstall.exe").is_file()))
         .unwrap_or(false);
     if !installed {
-        tracing::info!("not the installed rebuffer.exe; leaving autostart alone");
+        tracing::info!("not an installed copy; leaving autostart alone");
         return;
     }
     rebuffer_core::settings::set_autostart_hook(|b| {

@@ -1,6 +1,7 @@
-//! Translations, read from the same locale JSON the WebView front end uses.
+//! Translations, from the locale JSON in `locales/` (kept in the shape the
+//! WebView front end used, so the files carried over unchanged).
 //!
-//! Lookup mirrors `src/lib/i18n/index.svelte.ts`: nested keys flattened with
+//! Lookup as that front end did it: nested keys flattened with
 //! dots, `{name}` placeholders, English for anything a locale lacks, and
 //! `"system"` resolved against the languages Windows shows its own UI in.
 
@@ -12,16 +13,16 @@ use slint::ComponentHandle;
 use crate::ui::I18n;
 
 const LOCALES: &[(&str, &str)] = &[
-    ("en", include_str!("../../../src/lib/i18n/locales/en.json")),
-    ("ru", include_str!("../../../src/lib/i18n/locales/ru.json")),
-    ("de", include_str!("../../../src/lib/i18n/locales/de.json")),
-    ("es", include_str!("../../../src/lib/i18n/locales/es.json")),
-    ("pt", include_str!("../../../src/lib/i18n/locales/pt.json")),
-    ("it", include_str!("../../../src/lib/i18n/locales/it.json")),
-    ("zh", include_str!("../../../src/lib/i18n/locales/zh.json")),
-    ("ja", include_str!("../../../src/lib/i18n/locales/ja.json")),
-    ("fr", include_str!("../../../src/lib/i18n/locales/fr.json")),
-    ("ar", include_str!("../../../src/lib/i18n/locales/ar.json")),
+    ("en", include_str!("../locales/en.json")),
+    ("ru", include_str!("../locales/ru.json")),
+    ("de", include_str!("../locales/de.json")),
+    ("es", include_str!("../locales/es.json")),
+    ("pt", include_str!("../locales/pt.json")),
+    ("it", include_str!("../locales/it.json")),
+    ("zh", include_str!("../locales/zh.json")),
+    ("ja", include_str!("../locales/ja.json")),
+    ("fr", include_str!("../locales/fr.json")),
+    ("ar", include_str!("../locales/ar.json")),
 ];
 
 type Dict = HashMap<String, String>;

@@ -1,51 +1,46 @@
-# Publishing v0.1.0
+# Releasing Rebuffer
 
-Everything below is ready; these are the steps left, which are yours.
+Since 1.2.1 Rebuffer is the native build (`src-tauri/native`, Slint on top of
+`src-tauri/core`); there is no WebView, npm or Tauri step anywhere.
 
-## 1. Push
+## 1. Version
 
-```
-git remote add origin https://github.com/<you>/Rebuffer.git
-git push -u origin master
-```
+The shipping version lives in one place: `version` in
+`src-tauri/native/Cargo.toml`. Every installer takes the next unused version
+(`1.2.9` is followed by `1.3.0`); an installer is never rebuilt under a version
+that has already produced one, and the build script refuses to overwrite one.
 
-## 2. Tag
-
-```
-git tag -a v0.1.0 -m "Rebuffer v0.1.0"
-git push origin v0.1.0
-```
-
-## 3. Create the release
-
-Paste `RELEASE-NOTES-v0.1.0.md` as the body and attach:
+## 2. Checks
 
 ```
-src-tauri/target/release/bundle/nsis/Rebuffer_0.1.0_x64-setup.exe
+cd src-tauri
+cargo fmt --all --check
+cargo clippy --all-targets -- -D warnings
+cargo test
 ```
 
-The bare `rebuffer.exe` is not worth attaching: it needs the WebView2 runtime
-and writes to `%APPDATA%` either way, so the installer is the only sensible
-artifact for a user.
+## 3. Installer
 
-## Worth knowing before you press publish
+```
+python tools/build_native_installer.py
+```
 
-**The build is unsigned.** SmartScreen will warn every first-time user, and the
-warning looks alarming. It is stated in the README and in the release notes,
-but people read the release page, not the README, so keep it visible there.
+Builds the release binary and writes
+`src-tauri/target/release/bundle/nsis/Rebuffer_<version>_x64-setup.exe`.
+It needs `makensis` and the `nsis_tauri_utils` plugin: the copies a Tauri CLI
+once installed under `%LOCALAPPDATA%\tauri\NSIS` are used by default,
+`NSIS_DIR` / `NSIS_PLUGIN_DIR` override them (CI does).
 
-**CI has never run.** The workflow in `.github/workflows/build.yml` was written
-during development and its gates (`cargo fmt --check`, `clippy -D warnings`,
-tests, `tsc`, `svelte-check`) all pass locally as of this commit. The full
-`tauri build` step on a GitHub runner has never executed. Expect the first run
-to need a fix or two, and do not let a red badge on day one surprise you.
+## 4. Try it
 
-**`docs/KNOWN-ISSUES.md` is linked from the README on purpose.** It names two
-real defects and everything that was verified by reading rather than by
-running. It is better for that to be found by a reader than by a bug report.
+Quit the running copy from the tray, then run the installer (or `/S` for a
+silent install; it asks for elevation, being a per-machine install), start
+Rebuffer, and check: the tray icon, Alt+V, a copy landing in the popup, the
+settings window, and that `HKCU\...\Run\Rebuffer` points at the installed
+`rebuffer.exe` when "Launch on startup" is on.
 
-## Current state
+## 5. Publish
 
-- 113 files tracked; the 18 MB of development scaffolding is gone
-- `cargo fmt`, `clippy -D warnings`, 104 tests, `tsc`, `svelte-check`: all clean
-- Artifacts built from this commit: installer 3.29 MB, exe 8.17 MB
+Tag `v<version>`, create the GitHub release, attach the installer. The build
+is not code-signed: SmartScreen warns on first run, so say so on the release
+page.

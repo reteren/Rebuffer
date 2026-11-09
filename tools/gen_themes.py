@@ -71,7 +71,7 @@ def build(name, *, hue, sat, dark, bg_l, text_hex, accent, on_accent, ext, dange
                      else '  color-scheme: %s;\n' % v for k, v in lines)
     css = '/* Theme: %s\n   %s */\n:root[data-theme="%s"],\n[data-theme="%s"] {\n%s\n}\n' % (
         name, comment, name, name, body)
-    io.open('src/lib/styles/themes/%s.css' % name, 'w', encoding='utf-8', newline='\n').write(css)
+    io.open('src-tauri/native/themes/%s.css' % name, 'w', encoding='utf-8', newline='\n').write(css)
     bg = hex_of(hue, sat, L)
     t2 = None
     # composite text-2 over bg to measure it honestly

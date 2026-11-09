@@ -1,9 +1,9 @@
-//! `settings.json` — the shape is a shared contract (every module reads it, and
-//! `src/lib/types.ts` mirrors it), so the structs below are fixed.
+//! `settings.json` — the shape is a shared contract (every module reads it,
+//! users edit it by hand, exports carry it), so the structs below are fixed.
 //!
 //! OWNER: worker W4 owns loading, validation, atomic save, and hot reload.
-//! Do not change field names or defaults without updating `types.ts` and
-//! `docs/SPEC.md` §7 in the same change.
+//! Do not change field names or defaults without updating `docs/SPEC.md` §7
+//! in the same change.
 
 use std::fs;
 use std::io::Write;

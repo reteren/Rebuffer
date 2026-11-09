@@ -1,13 +1,16 @@
 # Themes
 
-Six named themes plus the built-in dark. Each lives in its own file under
-`src/lib/styles/themes/` and is selected by `data-theme` on the document root,
-set from `settings.appearance.theme`.
+Eleven themes, each in its own CSS file under `src-tauri/native/themes/`,
+selected by `settings.appearance.theme`. The files are the WebView front end's
+theme files, kept in the same shape: `src-tauri/native/src/theme.rs` reads every
+plain color token (`#rgb`, `#rrggbb`, `rgba()`) from them at startup and on
+every theme change, and sets the Slint `Theme` global of each window. Gradients
+and shadows have no Slint counterpart and are skipped. A token a theme leaves
+out keeps the darkblue value.
 
 ## The contract
 
-`tokens.css` defines the complete set on `:root` — that is the dark theme and
-the fallback. A theme file overrides ONLY the colour tokens, inside a single
+A theme file overrides ONLY the colour tokens, inside a single
 `:root[data-theme="<name>"]` block. It must not touch radii, type, motion,
 spacing, blur or the chevron mask: those are structural and shared, and a theme
 that changes them stops being a theme.
@@ -56,13 +59,16 @@ dark in exactly the places that mattered.
 
 ## Adding one
 
-1. Write `src/lib/styles/themes/<name>.css` with one
+1. Write `src-tauri/native/themes/<name>.css` with one
    `:root[data-theme="<name>"]` block.
-2. Import it in `src/lib/styles/tokens.css` at the bottom.
-3. Add the name to `THEMES` in `src/lib/types.ts`.
+2. Add it to `FILES` in `src-tauri/native/src/theme.rs`.
+3. Add the name to `THEMES` in `src-tauri/core/src/settings.rs`, which
+   validates `appearance.theme`.
+4. Add `theme.<name>` to every file in `src-tauri/native/locales/`.
 
-Nothing else needs to change: the store applies `data-theme`, and every
-component already reads tokens.
+The settings window lists it, with a preview drawn from its own tokens, as soon
+as it is in `FILES`. The test `every_theme_defines_the_core_tokens` checks the
+tokens the windows cannot do without.
 
 ## The set
 
