@@ -65,8 +65,10 @@ pub fn signal_first() {
     }
 }
 
-/// True while the WebView build (`rebuffer.exe`) runs: it owns the same store
-/// and the same hotkey.
+/// True while a WebView build (`rebuffer.exe`) runs: it owns the same store
+/// and the same hotkey. This process is skipped — installed, it carries the
+/// same file name. Call it only after `acquire`, which rules out a second
+/// native instance.
 pub fn webview_build_running() -> bool {
     // FFI: a process snapshot, walked and closed here.
     unsafe {
@@ -77,12 +79,13 @@ pub fn webview_build_running() -> bool {
             dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
             ..Default::default()
         };
+        let own = std::process::id();
         let mut found = false;
         let mut ok = Process32FirstW(snap, &mut entry).is_ok();
         while ok {
             let len = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(0);
             let name = String::from_utf16_lossy(&entry.szExeFile[..len]);
-            if name.eq_ignore_ascii_case("rebuffer.exe") {
+            if name.eq_ignore_ascii_case("rebuffer.exe") && entry.th32ProcessID != own {
                 found = true;
                 break;
             }

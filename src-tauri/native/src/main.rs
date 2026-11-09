@@ -63,14 +63,18 @@ fn main() {
 
     // Two processes on one store would both capture every copy and both
     // claim the hotkey. A second launch hands over to the first and leaves.
-    if instance::webview_build_running() {
-        instance::refuse("The WebView build of Rebuffer is running. Quit it from the tray first.");
-        return;
-    }
+    // The mutex first: a second native instance hands over and leaves. Only
+    // then look for a WebView build. Installed, the native build is itself
+    // named rebuffer.exe, so any other rebuffer.exe can only be the WebView
+    // one once we know we are the first native instance.
     let Some(_instance) = instance::acquire() else {
         instance::signal_first();
         return;
     };
+    if instance::webview_build_running() {
+        instance::refuse("The WebView build of Rebuffer is running. Quit it from the tray first.");
+        return;
+    }
 
     slint::BackendSelector::new()
         .backend_name("winit".into())
