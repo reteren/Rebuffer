@@ -239,6 +239,20 @@ fn wire(ui: &SettingsWindow) {
         }
         slint::winit_030::EventResult::Propagate
     });
+    ui.on_start_drag(|| {
+        with(|w| {
+            w.ui.window().with_winit_window(|win| {
+                let _ = win.drag_window();
+            });
+        });
+    });
+    ui.on_close_window(dismiss);
+    ui.on_go_back(|| {
+        dismiss();
+        // Once the settings are gone, so the popup takes the window that is
+        // in front then as its paste target, never the settings themselves.
+        slint::Timer::single_shot(Duration::from_millis(60), crate::popup::show);
+    });
     ui.window().on_close_requested(|| {
         // Dropped after this handler returns, not inside it.
         slint::Timer::single_shot(Duration::from_millis(0), || {

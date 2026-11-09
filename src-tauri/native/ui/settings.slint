@@ -468,26 +468,44 @@ component Field inherits VerticalLayout {
 }
 
 // .content section: 14px between fields, an h2 at 15px.
+// .content section: 14px between fields. Its h2 sits in the window's pinned
+// top bar (TopBar), which keeps it where the WebView had it: 20px down, 4px
+// margin, then the 14px gap to the first field.
 component Section inherits VerticalLayout {
     in property <string> title;
     padding-left: 24px;
     padding-right: 24px;
-    padding-top: 20px;
+    padding-top: 0;
     padding-bottom: 40px;
     spacing: 14px;
     alignment: start;
-    // h2 { margin: 0 0 4px }
-    VerticalLayout {
-        padding-bottom: 4px;
-        Text {
-            text: root.title;
-            color: Theme.text-1;
-            font-size: 15px;
-            font-weight: 600;
-            horizontal-alignment: I18n.rtl ? right : left;
+    @children
+}
+
+// A 28px square icon button for the top bar.
+component BarButton inherits Rectangle {
+    in property <string> icon;
+    callback clicked;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: t.pressed ? Look.accent-soft : t.has-hover ? Look.hover : transparent;
+    Path {
+        width: 14px;
+        height: 14px;
+        viewbox-width: 16;
+        viewbox-height: 16;
+        commands: root.icon;
+        stroke: t.has-hover ? Theme.text-1 : Theme.text-2;
+        stroke-width: 1.5px;
+        fill: transparent;
+    }
+    t := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
         }
     }
-    @children
 }
 
 // ThemePreview.svelte: a miniature popup painted in the theme's own colors.
@@ -618,6 +636,9 @@ export component SettingsWindow inherits Window {
     preferred-height: 660px;
     min-width: 720px;
     min-height: 520px;
+    // Explicit: left to the layout, hand-placed layers can cap the window.
+    max-width: 100000px;
+    max-height: 100000px;
     default-font-size: 13px;
     default-font-family: "Segoe UI Variable Text";
     // Chromium draws Segoe UI with ClearType, which reads heavier than the
@@ -663,6 +684,11 @@ export component SettingsWindow inherits Window {
     callback import-data(int);
     callback clear-history(bool);
     callback dismiss-error();
+    // The window has no frame: these move it, take it back to the popup, or
+    // put it away.
+    callback start-drag();
+    callback go-back();
+    callback close-window();
 
     // body { background: var(--window-wash) } over the acrylic.
     Image {
@@ -682,6 +708,14 @@ export component SettingsWindow inherits Window {
             x: I18n.rtl ? parent.width - 180px : 0;
             width: 180px;
             height: parent.height;
+            // Below the items the column is empty: a handle for the window.
+            TouchArea {
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                        root.start-drag();
+                    }
+                }
+            }
             VerticalLayout {
                 padding-top: 16px;
                 padding-bottom: 16px;
@@ -717,10 +751,55 @@ export component SettingsWindow inherits Window {
             }
         }
 
+        // The top bar: the section's h2, pinned, and on the far side the back
+        // and close buttons. Its empty part moves the window.
+        Rectangle {
+            x: I18n.rtl ? 0 : 180px;
+            y: 0;
+            width: parent.width - 180px;
+            height: 58px;
+            TouchArea {
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                        root.start-drag();
+                    }
+                }
+            }
+            Text {
+                y: 20px;
+                width: parent.width - 48px - 70px;
+                x: I18n.rtl ? 70px + 24px : 24px;
+                text: I18n.tr("settings.tab." + ["general", "storage", "appearance", "privacy", "data", "about"][root.section], I18n.revision);
+                color: Theme.text-1;
+                font-size: 15px;
+                font-weight: 600;
+                horizontal-alignment: I18n.rtl ? right : left;
+            }
+            // Close at the outer edge, back next to it; mirrored right to left.
+            BarButton {
+                x: I18n.rtl ? 12px + 28px + 6px : parent.width - 12px - 28px - 6px - 28px;
+                y: 12px;
+                // Back to the popup: an arrow pointing to the start side.
+                icon: I18n.rtl ? "M6 3l5 5-5 5" : "M10 3L5 8l5 5";
+                clicked => {
+                    root.go-back();
+                }
+            }
+            BarButton {
+                x: I18n.rtl ? 12px : parent.width - 12px - 28px;
+                y: 12px;
+                icon: "M4 4l8 8M12 4l-8 8";
+                clicked => {
+                    root.close-window();
+                }
+            }
+        }
+
         ScrollView {
             x: I18n.rtl ? 0 : 180px;
+            y: 58px;
             width: parent.width - 180px;
-            height: parent.height;
+            height: parent.height - 58px;
             VerticalLayout {
                 alignment: start;
 

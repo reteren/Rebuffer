@@ -668,6 +668,12 @@ export component PopupWindow inherits Window {
     background: Theme.backdrop;
     preferred-width: 780px;
     preferred-height: 620px;
+    // Explicit limits: left to the layout, one of the hand-placed layers
+    // capped the window at 180px tall, so it came up and resized that small.
+    min-width: 520px;
+    min-height: 300px;
+    max-width: 100000px;
+    max-height: 100000px;
     default-font-size: 13px;
     default-font-family: "Segoe UI Variable Text";
     // Chromium draws Segoe UI with ClearType, which reads heavier than the
