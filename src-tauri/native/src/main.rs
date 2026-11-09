@@ -104,6 +104,8 @@ fn main() {
         instance::refuse(&format!("Rebuffer could not create its window: {e}"));
         return;
     }
+    install_autostart_hook(&core);
+
     if let Some(snapshot) = snapshot {
         if snapshot.window.as_deref() == Some("settings") {
             settings::snapshot(core.clone(), snapshot);
@@ -128,4 +130,37 @@ fn main() {
         tracing::error!("event loop ended with an error: {e}");
     }
     tracing::info!("native front end exiting");
+}
+
+/// The Run-key value the WebView build registered itself under, so the native
+/// build takes over the same entry instead of adding a second one.
+const RUN_VALUE: &str = "Rebuffer";
+
+/// Keeps HKCU\...\Run in step with `behavior.launchOnStartup`, and heals it
+/// once at startup. Only the installed copy does this: it is the one named
+/// `rebuffer.exe`. A development build (`rebuffer-native.exe`) registering its
+/// own path would make Windows start a build directory at every logon.
+fn install_autostart_hook(core: &Core) {
+    let installed = std::env::current_exe()
+        .ok()
+        .and_then(|p| {
+            p.file_name()
+                .map(|n| n.eq_ignore_ascii_case("rebuffer.exe"))
+        })
+        .unwrap_or(false);
+    if !installed {
+        tracing::info!("not the installed rebuffer.exe; leaving autostart alone");
+        return;
+    }
+    rebuffer_core::settings::set_autostart_hook(|b| {
+        let r = if b.launch_on_startup {
+            rebuffer_core::settings::rewrite_run_value(RUN_VALUE, false)
+        } else {
+            rebuffer_core::settings::delete_run_value(RUN_VALUE)
+        };
+        if let Err(e) = r {
+            tracing::warn!("autostart not updated: {e}");
+        }
+    });
+    rebuffer_core::settings::apply_autostart(&core.settings.get().behavior);
 }

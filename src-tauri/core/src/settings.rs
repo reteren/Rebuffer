@@ -844,6 +844,41 @@ pub fn rewrite_run_value(app_name: &str, silent: bool) -> AppResult<()> {
     Ok(())
 }
 
+/// Removes `app_name` from the HKCU Run key. A value that is not there is
+/// not an error: the goal is that it is gone.
+pub fn delete_run_value(app_name: &str) -> AppResult<()> {
+    use windows::core::{w, PCWSTR};
+    use windows::Win32::Foundation::ERROR_FILE_NOT_FOUND;
+    use windows::Win32::System::Registry::{
+        RegCloseKey, RegDeleteValueW, RegOpenKeyExW, HKEY, HKEY_CURRENT_USER, KEY_SET_VALUE,
+    };
+
+    let name = wide(app_name);
+    let mut hkey = HKEY::default();
+    // FFI: the Run key opened for writing, the value deleted, the key closed.
+    unsafe {
+        let err = RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run"),
+            None,
+            KEY_SET_VALUE,
+            &mut hkey,
+        );
+        if err.0 != 0 {
+            return Err(AppError::Win(format!(
+                "RegOpenKeyExW(Run) failed: {}",
+                err.0
+            )));
+        }
+        let err = RegDeleteValueW(hkey, PCWSTR(name.as_ptr()));
+        let _ = RegCloseKey(hkey);
+        if err.0 != 0 && err != ERROR_FILE_NOT_FOUND {
+            return Err(AppError::Win(format!("RegDeleteValueW failed: {}", err.0)));
+        }
+    }
+    Ok(())
+}
+
 /// NUL-terminated UTF-16, for `PCWSTR` parameters.
 fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
