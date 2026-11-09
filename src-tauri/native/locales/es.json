@@ -223,5 +223,7 @@
   "dialog.chooseStore": "Elegir ubicación del almacén",
   "dialog.exportTitle": "Exportar datos de Rebuffer",
   "dialog.archiveFilter": "Archivo de Rebuffer",
-  "dialog.importTitle": "Importar datos de Rebuffer"
+  "dialog.importTitle": "Importar datos de Rebuffer",
+  "notify.storeNearlyFull": "El almacén del portapapeles está al {pct} % ({used} de {cap}). Los elementos más antiguos se eliminarán automáticamente.",
+  "notify.storePruned": "El almacén del portapapeles estaba lleno: se eliminaron {count} elementos antiguos y se liberaron {size}."
 }

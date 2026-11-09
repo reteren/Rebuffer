@@ -100,6 +100,24 @@ pub const LANGUAGES: [(&str, &str); 10] = [
     ("es", "Español"),
 ];
 
+/// Loads the strings for `setting` (a code or `"system"`), if they are not the
+/// ones loaded already, and returns the code it resolved to.
+pub fn set_language(setting: &str) -> &'static str {
+    let code = resolve(setting);
+    STATE.with(|s| {
+        let mut s = s.borrow_mut();
+        if s.as_ref().is_some_and(|st| st.code == code) {
+            return;
+        }
+        *s = Some(State {
+            code,
+            active: load(code),
+            english: load("en"),
+        });
+    });
+    code
+}
+
 /// Switches the interface language and tells a window to re-read every
 /// string. Each window has its own `I18n` global, so each one is applied.
 pub fn apply<C>(ui: &C, setting: &str)
@@ -107,19 +125,7 @@ where
     C: ComponentHandle,
     for<'a> I18n<'a>: slint::Global<'a, C>,
 {
-    let code = resolve(setting);
-    STATE.with(|s| {
-        let mut s = s.borrow_mut();
-        if s.as_ref().is_some_and(|st| st.code == code) {
-            return false;
-        }
-        *s = Some(State {
-            code,
-            active: load(code),
-            english: load("en"),
-        });
-        true
-    });
+    let code = set_language(setting);
     let global = ui.global::<I18n>();
     global.on_tr(|key, _revision| tr(key.as_str()).into());
     // Always bumped: a window built after the language was loaded still has

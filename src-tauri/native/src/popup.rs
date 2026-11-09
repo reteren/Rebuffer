@@ -509,24 +509,10 @@ pub fn settings_changed() {
 
 pub fn storage_warning(w: StorageWarning) {
     with(|p| {
-        let text = if w.removed_items > 0 {
-            format!(
-                "Clipboard store full — removed {} old items to free {}.",
-                w.removed_items,
-                fmt_bytes(w.freed_bytes)
-            )
-        } else if w.cap_bytes > 0 {
-            format!(
-                "Clipboard store is {}% full ({} of {}). Older items will be pruned automatically.",
-                (w.used_bytes * 100 / w.cap_bytes),
-                fmt_bytes(w.used_bytes),
-                fmt_bytes(w.cap_bytes)
-            )
-        } else {
-            format!("Clipboard store is at {}.", fmt_bytes(w.used_bytes))
-        };
-        p.ui.set_banner(text.into());
+        p.ui.set_banner(crate::notify::storage_text(&w).into());
         p.ui.set_banner_is_error(false);
+        let enabled = p.core.settings.get().storage.notify_when_full;
+        crate::notify::storage_warning(&w, enabled);
     });
     history_changed();
 }

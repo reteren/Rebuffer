@@ -223,5 +223,7 @@
   "dialog.chooseStore": "Choose store location",
   "dialog.exportTitle": "Export Rebuffer data",
   "dialog.archiveFilter": "Rebuffer archive",
-  "dialog.importTitle": "Import Rebuffer data"
+  "dialog.importTitle": "Import Rebuffer data",
+  "notify.storeNearlyFull": "The clipboard store is {pct}% full ({used} of {cap}). The oldest items will be removed automatically.",
+  "notify.storePruned": "The clipboard store was full: {count} old items were removed to free {size}."
 }

@@ -223,5 +223,7 @@
   "dialog.chooseStore": "Scegli la posizione dell’archivio",
   "dialog.exportTitle": "Esporta i dati di Rebuffer",
   "dialog.archiveFilter": "Archivio Rebuffer",
-  "dialog.importTitle": "Importa i dati di Rebuffer"
+  "dialog.importTitle": "Importa i dati di Rebuffer",
+  "notify.storeNearlyFull": "L'archivio degli appunti è pieno al {pct}% ({used} su {cap}). Gli elementi più vecchi verranno rimossi automaticamente.",
+  "notify.storePruned": "L'archivio degli appunti era pieno: sono stati rimossi {count} elementi vecchi, liberando {size}."
 }

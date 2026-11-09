@@ -223,5 +223,7 @@
   "dialog.chooseStore": "保存場所を選択",
   "dialog.exportTitle": "Rebuffer データをエクスポート",
   "dialog.archiveFilter": "Rebuffer アーカイブ",
-  "dialog.importTitle": "Rebuffer データをインポート"
+  "dialog.importTitle": "Rebuffer データをインポート",
+  "notify.storeNearlyFull": "クリップボードの保存領域が {pct}% 使用されています（{used} / {cap}）。古い項目から自動的に削除されます。",
+  "notify.storePruned": "クリップボードの保存領域がいっぱいでした。古い項目を {count} 件削除し、{size} を解放しました。"
 }

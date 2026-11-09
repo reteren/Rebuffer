@@ -223,5 +223,7 @@
   "dialog.chooseStore": "Escolher localização do armazenamento",
   "dialog.exportTitle": "Exportar dados do Rebuffer",
   "dialog.archiveFilter": "Arquivo do Rebuffer",
-  "dialog.importTitle": "Importar dados do Rebuffer"
+  "dialog.importTitle": "Importar dados do Rebuffer",
+  "notify.storeNearlyFull": "O armazenamento da área de transferência está {pct}% cheio ({used} de {cap}). Os itens mais antigos serão removidos automaticamente.",
+  "notify.storePruned": "O armazenamento da área de transferência estava cheio: {count} itens antigos foram removidos, liberando {size}."
 }

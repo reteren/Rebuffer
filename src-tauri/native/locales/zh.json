@@ -223,5 +223,7 @@
   "dialog.chooseStore": "选择存储位置",
   "dialog.exportTitle": "导出 Rebuffer 数据",
   "dialog.archiveFilter": "Rebuffer 存档",
-  "dialog.importTitle": "导入 Rebuffer 数据"
+  "dialog.importTitle": "导入 Rebuffer 数据",
+  "notify.storeNearlyFull": "剪贴板存储已使用 {pct}%（{used} / {cap}）。最早的项目将被自动删除。",
+  "notify.storePruned": "剪贴板存储已满：已删除 {count} 个旧项目，释放了 {size}。"
 }

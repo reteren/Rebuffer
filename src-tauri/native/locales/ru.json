@@ -223,5 +223,7 @@
   "dialog.chooseStore": "Выберите расположение хранилища",
   "dialog.exportTitle": "Экспорт данных Rebuffer",
   "dialog.archiveFilter": "Архив Rebuffer",
-  "dialog.importTitle": "Импорт данных Rebuffer"
+  "dialog.importTitle": "Импорт данных Rebuffer",
+  "notify.storeNearlyFull": "Хранилище буфера обмена заполнено на {pct}% ({used} из {cap}). Самые старые записи будут удалены автоматически.",
+  "notify.storePruned": "Хранилище буфера обмена было заполнено: удалено старых записей: {count}, освобождено {size}."
 }

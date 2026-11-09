@@ -14,6 +14,7 @@
 mod host;
 mod i18n;
 mod instance;
+mod notify;
 mod popup;
 mod settings;
 mod theme;
@@ -58,6 +59,10 @@ fn snapshot_args() -> Option<Snapshot> {
 }
 
 fn main() {
+    if std::env::args().any(|a| a == "--notify-test") {
+        notify::self_test();
+        return;
+    }
     let snapshot = snapshot_args();
     let inactive = snapshot.is_some();
 
@@ -88,6 +93,7 @@ fn main() {
         .select()
         .expect("the winit backend with the software renderer is compiled in");
 
+    notify::init();
     let host = Arc::new(host::NativeHost);
     let core = match Core::start(
         host,

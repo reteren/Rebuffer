@@ -223,5 +223,7 @@
   "dialog.chooseStore": "اختر موقع المخزن",
   "dialog.exportTitle": "تصدير بيانات Rebuffer",
   "dialog.archiveFilter": "أرشيف Rebuffer",
-  "dialog.importTitle": "استيراد بيانات Rebuffer"
+  "dialog.importTitle": "استيراد بيانات Rebuffer",
+  "notify.storeNearlyFull": "مخزن الحافظة ممتلئ بنسبة {pct}% ({used} من {cap}). ستُحذف أقدم العناصر تلقائيًا.",
+  "notify.storePruned": "كان مخزن الحافظة ممتلئًا: حُذف {count} من العناصر القديمة وتم تحرير {size}."
 }

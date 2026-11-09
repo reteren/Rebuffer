@@ -223,5 +223,7 @@
   "dialog.chooseStore": "Choisir l’emplacement du stockage",
   "dialog.exportTitle": "Exporter les données de Rebuffer",
   "dialog.archiveFilter": "Archive Rebuffer",
-  "dialog.importTitle": "Importer les données de Rebuffer"
+  "dialog.importTitle": "Importer les données de Rebuffer",
+  "notify.storeNearlyFull": "Le stockage du presse-papiers est plein à {pct} % ({used} sur {cap}). Les éléments les plus anciens seront supprimés automatiquement.",
+  "notify.storePruned": "Le stockage du presse-papiers était plein : {count} anciens éléments ont été supprimés, {size} libérés."
 }

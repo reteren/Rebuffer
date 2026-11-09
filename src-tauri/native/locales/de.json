@@ -223,5 +223,7 @@
   "dialog.chooseStore": "Speicherort auswählen",
   "dialog.exportTitle": "Rebuffer-Daten exportieren",
   "dialog.archiveFilter": "Rebuffer-Archiv",
-  "dialog.importTitle": "Rebuffer-Daten importieren"
+  "dialog.importTitle": "Rebuffer-Daten importieren",
+  "notify.storeNearlyFull": "Der Zwischenablagespeicher ist zu {pct} % voll ({used} von {cap}). Die ältesten Einträge werden automatisch entfernt.",
+  "notify.storePruned": "Der Zwischenablagespeicher war voll: {count} alte Einträge wurden entfernt, {size} wurden freigegeben."
 }
