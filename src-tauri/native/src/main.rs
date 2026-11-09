@@ -21,6 +21,7 @@ mod theme;
 mod thumbs;
 mod tray;
 mod ui;
+mod wash;
 
 use std::rc::Rc;
 use std::sync::Arc;

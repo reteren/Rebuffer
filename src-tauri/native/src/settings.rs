@@ -98,13 +98,47 @@ pub fn open(core: Rc<Core>) {
         tracing::error!("settings window did not show: {e}");
         return;
     }
-    // The attributes hook keeps every window off the taskbar; this one is a
-    // real window and belongs there.
+    crate::theme::frame(window.ui.window());
+    // Centred on the monitor it opens on, like the WebView window's
+    // `.center()`. It stays off the taskbar, as that one did.
     window.ui.window().with_winit_window(|w| {
-        use slint::winit_030::winit::platform::windows::WindowExtWindows;
-        w.set_skip_taskbar(false);
+        if let Some(m) = w.current_monitor() {
+            let (mp, ms, ws) = (m.position(), m.size(), w.outer_size());
+            w.set_outer_position(slint::winit_030::winit::dpi::PhysicalPosition::new(
+                mp.x + (ms.width as i32 - ws.width as i32) / 2,
+                mp.y + (ms.height as i32 - ws.height as i32) / 2,
+            ));
+        }
         w.focus_window();
     });
+}
+
+/// Puts the window away, as closing it does.
+fn dismiss() {
+    with(|w| {
+        let _ = w.ui.hide();
+    });
+    slint::Timer::single_shot(Duration::from_millis(0), || {
+        WINDOW.with(|w| w.borrow_mut().take());
+    });
+}
+
+/// True while the foreground window belongs to this process (the popup, a
+/// file dialog, a menu) or there is none: losing focus to those is not the
+/// user leaving the settings.
+fn foreground_is_ours() -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+    // FFI: GetForegroundWindow takes no arguments; null is checked.
+    let foreground = unsafe { GetForegroundWindow() };
+    if foreground.is_invalid() {
+        return true;
+    }
+    let mut pid = 0u32;
+    // FFI: a live window handle and a valid out-parameter.
+    unsafe {
+        GetWindowThreadProcessId(foreground, Some(&mut pid));
+    }
+    pid == std::process::id()
 }
 
 /// Renders the settings window into a PNG without activating it, then
@@ -193,6 +227,18 @@ pub fn store_progress(p: StoreProgress) {
 }
 
 fn wire(ui: &SettingsWindow) {
+    // The WebView settings window hid when a click went elsewhere.
+    ui.window().on_winit_window_event(|_, event| {
+        if let slint::winit_030::winit::event::WindowEvent::Focused(false) = event {
+            let _ = slint::invoke_from_event_loop(|| {
+                if !foreground_is_ours() {
+                    tracing::info!("settings dismissed: focus moved elsewhere");
+                    dismiss();
+                }
+            });
+        }
+        slint::winit_030::EventResult::Propagate
+    });
     ui.window().on_close_requested(|| {
         // Dropped after this handler returns, not inside it.
         slint::Timer::single_shot(Duration::from_millis(0), || {

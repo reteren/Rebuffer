@@ -610,11 +610,14 @@ component ThemeTile inherits Rectangle {
 export component SettingsWindow inherits Window {
     title: "Rebuffer";
     icon: @image-url("../../icons/32x32.png");
-    background: Theme.bg-0;
+    background: Theme.backdrop;
+    // Undecorated, as the WebView window was: DWM gives it the shadow and the
+    // rounded corners (theme::frame), and a click elsewhere puts it away.
+    no-frame: true;
     preferred-width: 960px;
     preferred-height: 660px;
     min-width: 720px;
-    min-height: 480px;
+    min-height: 520px;
     default-font-size: 13px;
     default-font-family: "Segoe UI Variable Text";
     // Chromium draws Segoe UI with ClearType, which reads heavier than the
@@ -661,6 +664,13 @@ export component SettingsWindow inherits Window {
     callback clear-history(bool);
     callback dismiss-error();
 
+    // body { background: var(--window-wash) } over the acrylic.
+    Image {
+        width: parent.width;
+        height: parent.height;
+        source: Theme.wash;
+        image-fit: fill;
+    }
     // .settings background: --bg (bg-1) over the window.
     Rectangle {
         background: Theme.bg-1;
@@ -1703,5 +1713,11 @@ export component SettingsWindow inherits Window {
                 }
             }
         }
+    }
+
+    // 1px inner glass border (global.css body::before), above everything.
+    Rectangle {
+        border-width: 1px;
+        border-color: Theme.window-border;
     }
 }

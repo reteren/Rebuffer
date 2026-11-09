@@ -43,6 +43,10 @@ export global Theme {
     // bg-1 over bg-0: the window's own opaque color, under a card's
     // translucent surface where something else would otherwise show through.
     in-out property <color> window-base: #0f1116;
+    // The WebView windows' acrylic tint, under everything (theme.rs).
+    in-out property <color> backdrop: #121418;
+    // --window-wash, rendered (wash.rs); stretched over a whole window.
+    in-out property <image> wash;
     // A menu's glass, opaque: surface-3 at 88% over window-base.
     in-out property <color> menu-bg: #22252f;
     // The stock checkbox and radio, as Chromium drew them (theme.rs).

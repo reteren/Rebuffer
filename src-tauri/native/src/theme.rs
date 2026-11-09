@@ -84,7 +84,7 @@ pub fn names() -> impl Iterator<Item = &'static str> {
     FILES.iter().map(|(n, _)| *n)
 }
 
-fn css_of(name: &str) -> &'static str {
+pub(crate) fn css_of(name: &str) -> &'static str {
     FILES
         .iter()
         .find(|(n, _)| *n == name)
@@ -111,7 +111,11 @@ where
     if let Some(c) = parse_color(accent.trim()) {
         theme.set_accent(c);
     }
-    let window = over(theme.get_bg_1(), theme.get_bg_0());
+    theme.set_backdrop(BACKDROP);
+    theme.set_wash(crate::wash::render(css_of(name)));
+    // What a window shows where nothing else is drawn: --bg over the acrylic.
+    // The wash is left out here; under --bg it moves this by a few percent.
+    let window = over(theme.get_bg_1(), BACKDROP);
     theme.set_window_base(window);
     let glass = theme.get_surface_3();
     theme.set_menu_bg(over(
@@ -147,6 +151,22 @@ fn set_controls(theme: &Theme<'_>, light: bool) {
         Color::from_rgb_u8(0x3b, 0x3b, 0x3b)
     } else {
         Color::from_rgb_u8(0xff, 0xff, 0xff)
+    });
+}
+
+/// The WebView windows' acrylic tint, rgb(18, 20, 24) at 92% (vibrancy.rs),
+/// in every theme. The 8% of blurred desktop under it is left out: the
+/// software renderer draws opaque windows.
+const BACKDROP: Color = Color::from_rgb_u8(18, 20, 24);
+
+/// What the WebView windows had from DWM: undecorated, they kept the system
+/// shadow and, on Windows 11, rounded corners with the hairline border.
+pub fn frame(window: &slint::Window) {
+    use slint::winit_030::WinitWindowAccessor;
+    window.with_winit_window(|w| {
+        use slint::winit_030::winit::platform::windows::{CornerPreference, WindowExtWindows};
+        w.set_undecorated_shadow(true);
+        w.set_corner_preference(CornerPreference::Round);
     });
 }
 

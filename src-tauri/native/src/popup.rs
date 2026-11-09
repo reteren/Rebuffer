@@ -584,22 +584,37 @@ impl Popup {
             paste::clear_target();
         }
 
-        let settings = self.core.settings.get();
-        match placement::popup_rect(&settings.window) {
-            Ok((x, y, w, h)) => {
-                let window = self.ui.window();
-                window.set_position(slint::PhysicalPosition::new(x, y));
-                window.set_size(slint::PhysicalSize::new(w, h));
-            }
-            Err(e) => tracing::warn!("popup placement failed, showing where it was: {e}"),
-        }
-
+        // Reload before sizing: new rows change the layout's constraints, and
+        // a hidden window resized by them came up at its minimum height.
         if self.stale.replace(false) {
             self.reload(true);
+        }
+        let settings = self.core.settings.get();
+        let rect = match placement::popup_rect(&settings.window) {
+            Ok(rect) => Some(rect),
+            Err(e) => {
+                tracing::warn!("popup placement failed, showing where it was: {e}");
+                None
+            }
+        };
+        let window = self.ui.window();
+        if let Some((x, y, w, h)) = rect {
+            window.set_position(slint::PhysicalPosition::new(x, y));
+            window.set_size(slint::PhysicalSize::new(w, h));
         }
         if let Err(e) = self.ui.show() {
             tracing::error!("popup did not show: {e}");
             return;
+        }
+        crate::theme::frame(window);
+        // Showing applies the size winit kept for the hidden window; put the
+        // placed one back if that differs.
+        if let Some((x, y, w, h)) = rect {
+            if window.size() != slint::PhysicalSize::new(w, h) {
+                tracing::info!("popup came up at {:?}, resizing", window.size());
+                window.set_position(slint::PhysicalPosition::new(x, y));
+                window.set_size(slint::PhysicalSize::new(w, h));
+            }
         }
         self.visible.set(true);
         tracing::info!("popup shown");

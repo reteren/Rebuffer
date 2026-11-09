@@ -665,7 +665,7 @@ export component PopupWindow inherits Window {
     title: "Rebuffer";
     no-frame: true;
     always-on-top: true;
-    background: Theme.bg-0;
+    background: Theme.backdrop;
     preferred-width: 780px;
     preferred-height: 620px;
     default-font-size: 13px;
@@ -753,6 +753,13 @@ export component PopupWindow inherits Window {
         rename-input.select-all();
     }
 
+    // body { background: var(--window-wash) } over the acrylic.
+    Image {
+        width: parent.width;
+        height: parent.height;
+        source: Theme.wash;
+        image-fit: fill;
+    }
     // .popup's background is --bg (bg-1, translucent) over the window.
     Rectangle {
         background: Theme.bg-1;
