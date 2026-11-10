@@ -224,6 +224,8 @@ impl Rows {
 
 struct Popup {
     ui: PopupWindow,
+    /// Shows the window only once a frame is drawn (no white flash).
+    reveal: crate::reveal::Reveal,
     core: Rc<Core>,
     view: Rc<RefCell<View>>,
     rows: Rc<Rows>,
@@ -272,8 +274,10 @@ pub fn init(core: Rc<Core>) -> Result<(), slint::PlatformError> {
     wire_callbacks(&ui);
     wire_window_events(&ui);
 
+    let reveal = crate::reveal::Reveal::install(ui.window());
     let popup = Rc::new(Popup {
         ui,
+        reveal,
         core,
         view,
         rows,
@@ -602,8 +606,14 @@ impl Popup {
             window.set_position(slint::PhysicalPosition::new(x, y));
             window.set_size(slint::PhysicalSize::new(w, h));
         }
-        if let Err(e) = self.ui.show() {
-            tracing::error!("popup did not show: {e}");
+        let shown = self.reveal.show(window, || match self.ui.show() {
+            Ok(()) => true,
+            Err(e) => {
+                tracing::error!("popup did not show: {e}");
+                false
+            }
+        });
+        if !shown {
             return;
         }
         crate::theme::frame(window, self.ui.global::<Theme>().get_light());

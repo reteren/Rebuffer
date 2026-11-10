@@ -16,6 +16,7 @@ mod i18n;
 mod instance;
 mod notify;
 mod popup;
+mod reveal;
 mod settings;
 mod theme;
 mod thumbs;

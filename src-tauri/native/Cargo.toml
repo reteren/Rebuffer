@@ -34,7 +34,7 @@ serde_json = "1.0.151"
 rfd = "0.18.0"
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std", "unstable-locales"] }
 tracing = "0.1.44"
-windows = { version = "0.61.3", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_System_Diagnostics_ToolHelp", "Win32_UI_WindowsAndMessaging", "Win32_System_LibraryLoader", "Win32_UI_Shell", "Foundation", "Data_Xml_Dom", "UI_Notifications", "Win32_Graphics_Gdi", "Win32_Graphics_OpenGL"] }
+windows = { version = "0.61.3", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_System_Diagnostics_ToolHelp", "Win32_UI_WindowsAndMessaging", "Win32_System_LibraryLoader", "Win32_UI_Shell", "Foundation", "Data_Xml_Dom", "UI_Notifications", "Win32_Graphics_Gdi", "Win32_Graphics_OpenGL", "Win32_Graphics_Dwm"] }
 
 [build-dependencies]
 slint-build = "1.18.1"

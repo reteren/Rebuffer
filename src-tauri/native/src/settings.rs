@@ -58,6 +58,7 @@ const WIN_RESERVED: [(char, &str); 20] = [
 struct Window {
     ui: SettingsWindow,
     core: Rc<Core>,
+    reveal: crate::reveal::Reveal,
 }
 
 thread_local! {
@@ -82,7 +83,8 @@ pub fn open(core: Rc<Core>) {
         }
     };
     wire(&ui);
-    let window = Rc::new(Window { ui, core });
+    let reveal = crate::reveal::Reveal::install(ui.window());
+    let window = Rc::new(Window { ui, core, reveal });
     WINDOW.with(|w| *w.borrow_mut() = Some(window.clone()));
     window.refresh();
     window.refresh_stats();
@@ -94,8 +96,16 @@ pub fn open(core: Rc<Core>) {
         )
         .into(),
     );
-    if let Err(e) = window.ui.show() {
-        tracing::error!("settings window did not show: {e}");
+    let shown = window
+        .reveal
+        .show(window.ui.window(), || match window.ui.show() {
+            Ok(()) => true,
+            Err(e) => {
+                tracing::error!("settings window did not show: {e}");
+                false
+            }
+        });
+    if !shown {
         return;
     }
     crate::theme::frame(
@@ -155,7 +165,8 @@ pub fn snapshot(core: Rc<Core>, spec: crate::Snapshot) {
             return;
         }
     };
-    let window = Rc::new(Window { ui, core });
+    let reveal = crate::reveal::Reveal::install(ui.window());
+    let window = Rc::new(Window { ui, core, reveal });
     WINDOW.with(|w| *w.borrow_mut() = Some(window.clone()));
     window.refresh();
     window.refresh_stats();
