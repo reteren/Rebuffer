@@ -606,7 +606,7 @@ impl Popup {
             window.set_position(slint::PhysicalPosition::new(x, y));
             window.set_size(slint::PhysicalSize::new(w, h));
         }
-        let shown = self.reveal.show(window, || match self.ui.show() {
+        let shown = self.reveal.show(&self.ui, || match self.ui.show() {
             Ok(()) => true,
             Err(e) => {
                 tracing::error!("popup did not show: {e}");
@@ -616,7 +616,7 @@ impl Popup {
         if !shown {
             return;
         }
-        crate::theme::frame(window, self.ui.global::<Theme>().get_light());
+        crate::theme::frame(&self.ui, self.ui.global::<Theme>().get_light());
         // Showing applies the size winit kept for the hidden window; put the
         // placed one back if that differs.
         if let Some((x, y, w, h)) = rect {

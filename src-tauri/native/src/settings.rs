@@ -98,7 +98,7 @@ pub fn open(core: Rc<Core>) {
     );
     let shown = window
         .reveal
-        .show(window.ui.window(), || match window.ui.show() {
+        .show(&window.ui, || match window.ui.show() {
             Ok(()) => true,
             Err(e) => {
                 tracing::error!("settings window did not show: {e}");
@@ -109,20 +109,22 @@ pub fn open(core: Rc<Core>) {
         return;
     }
     crate::theme::frame(
-        window.ui.window(),
+        &window.ui,
         window.ui.global::<crate::ui::Theme>().get_light(),
     );
     // Centred on the monitor it opens on, like the WebView window's
     // `.center()`. It stays off the taskbar, as that one did.
-    window.ui.window().with_winit_window(|w| {
-        if let Some(m) = w.current_monitor() {
-            let (mp, ms, ws) = (m.position(), m.size(), w.outer_size());
-            w.set_outer_position(slint::winit_030::winit::dpi::PhysicalPosition::new(
-                mp.x + (ms.width as i32 - ws.width as i32) / 2,
-                mp.y + (ms.height as i32 - ws.height as i32) / 2,
-            ));
-        }
-        w.focus_window();
+    crate::theme::when_created(&window.ui, |ui| {
+        ui.window().with_winit_window(|w| {
+            if let Some(m) = w.current_monitor() {
+                let (mp, ms, ws) = (m.position(), m.size(), w.outer_size());
+                w.set_outer_position(slint::winit_030::winit::dpi::PhysicalPosition::new(
+                    mp.x + (ms.width as i32 - ws.width as i32) / 2,
+                    mp.y + (ms.height as i32 - ws.height as i32) / 2,
+                ));
+            }
+            w.focus_window();
+        });
     });
 }
 

@@ -46,18 +46,27 @@ impl Reveal {
 
     /// Shows `window` (through `show`) cloaked, to be uncloaked once a frame
     /// is on screen.
-    pub fn show(&self, window: &slint::Window, show: impl FnOnce() -> bool) -> bool {
+    pub fn show<C: slint::ComponentHandle + 'static>(
+        &self,
+        ui: &C,
+        show: impl FnOnce() -> bool,
+    ) -> bool {
         // A window that exists already is cloaked before it is shown; a new
-        // one only gets a handle by being shown, and is cloaked right after,
-        // before DWM composes it.
-        if let Some(hwnd) = hwnd(window) {
+        // one only gets a handle once winit has made it, and is cloaked then.
+        if let Some(hwnd) = hwnd(ui.window()) {
             cloak(hwnd, true);
         }
         if !show() {
             return false;
         }
+        let this = self.clone();
+        crate::theme::when_created(ui, move |ui| this.cloak_until_drawn(ui.window()));
+        true
+    }
+
+    fn cloak_until_drawn(&self, window: &slint::Window) {
         let Some(hwnd) = hwnd(window) else {
-            return true;
+            return;
         };
         cloak(hwnd, true);
         self.pending.set(Some(hwnd));
@@ -75,7 +84,6 @@ impl Reveal {
                 cloak(hwnd, false);
             }
         });
-        true
     }
 }
 

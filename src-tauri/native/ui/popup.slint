@@ -675,6 +675,90 @@ component Banner inherits Rectangle {
     }
 }
 
+// The settings button (Popup.svelte .icon-btn): the owner's traced gear,
+// eight teeth with a hole, in the accent; on hover it turns -110 degrees over
+// 0.8s, easing out, and the hover tint stays still under it.
+component GearButton inherits Rectangle {
+    callback clicked();
+    width: 46px;
+    height: 46px;
+    border-radius: 10px;
+    background: t.has-hover ? Accent.soft : transparent;
+    animate background { duration: Theme.reduce-motion ? 0ms : 90ms; }
+    Path {
+        width: 32px;
+        height: 32px;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        // The SVG's evenodd: with the default nonzero rule the hole fills in.
+        fill-rule: evenodd;
+        commands: "M9.94 3.75 L9.82 0.23 L14.18 0.23 L14.06 3.75 A8.50 8.50 0 0 1 16.38 4.71 L18.78 2.14 L21.86 5.22 L19.29 7.62 A8.50 8.50 0 0 1 20.25 9.94 L23.77 9.82 L23.77 14.18 L20.25 14.06 A8.50 8.50 0 0 1 19.29 16.38 L21.86 18.78 L18.78 21.86 L16.38 19.29 A8.50 8.50 0 0 1 14.06 20.25 L14.18 23.77 L9.82 23.77 L9.94 20.25 A8.50 8.50 0 0 1 7.62 19.29 L5.22 21.86 L2.14 18.78 L4.71 16.38 A8.50 8.50 0 0 1 3.75 14.06 L0.23 14.18 L0.23 9.82 L3.75 9.94 A8.50 8.50 0 0 1 4.71 7.62 L2.14 5.22 L5.22 2.14 L7.62 4.71 Z M16.09 12.00 A4.09 4.09 0 1 0 7.91 12.00 A4.09 4.09 0 1 0 16.09 12.00 Z";
+        fill: t.has-hover ? Accent.strong : Theme.accent;
+        transform-rotation: t.has-hover && !Theme.reduce-motion ? -110deg : 0deg;
+        animate transform-rotation { duration: 800ms; easing: cubic-bezier(0.16, 1, 0.3, 1); }
+    }
+    t := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+// ZoomDial.svelte: a vertical pill of five dots that fills from the bottom
+// like a level meter. Dragged up or down (a step per 14px), turned with the
+// wheel, or clicked on a dot.
+component ZoomDial inherits Rectangle {
+    in property <int> zoom;
+    callback zoom-to(int);
+    property <int> drag-base;
+    property <bool> dragged;
+    width: 17px;
+    height: 63px;
+    border-radius: self.width / 2;
+    background: t.has-hover || t.pressed ? Theme.surface-4 : Theme.surface-2;
+    border-width: 1px;
+    border-color: Theme.border-1;
+    // border 1 + padding 6 + track padding 2, then a dot every 5 + 5px.
+    for step in [5, 4, 3, 2, 1]: Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: 9px + (5 - step) * 10px;
+        width: 5px;
+        height: 5px;
+        border-radius: 2.5px;
+        background: Theme.accent;
+        opacity: step <= root.zoom ? 1 : 0.22;
+    }
+    t := TouchArea {
+        mouse-cursor: ns-resize;
+        pointer-event(e) => {
+            if e.kind == PointerEventKind.down {
+                root.drag-base = root.zoom;
+                root.dragged = false;
+            }
+        }
+        moved => {
+            if self.pressed {
+                if abs(self.pressed-y - self.mouse-y) > 3px {
+                    root.dragged = true;
+                }
+                if root.dragged {
+                    root.zoom-to(max(1, min(5, root.drag-base + round((self.pressed-y - self.mouse-y) / 14px))));
+                }
+            }
+        }
+        clicked => {
+            if !root.dragged {
+                root.zoom-to(max(1, min(5, 5 - floor((self.mouse-y - 6px) / 10px))));
+            }
+        }
+        scroll-event(e) => {
+            root.zoom-to(max(1, min(5, e.delta-y > 0 ? root.zoom + 1 : root.zoom - 1)));
+            accept
+        }
+    }
+}
+
 export component PopupWindow inherits Window {
     title: "Rebuffer";
     no-frame: true;
@@ -1088,53 +1172,17 @@ export component PopupWindow inherits Window {
 
             if I18n.rtl: corner-rtl := HorizontalLayout {
                 spacing: 8px;
-                dial-rtl := Rectangle {
-                    width: 17px;
-                    height: 63px;
+                ZoomDial {
                     y: (parent.height - self.height) / 2;
-                    border-radius: self.width / 2;
-                    background: dial-rtl-t.has-hover ? Theme.surface-4 : Theme.surface-2;
-                    border-width: 1px;
-                    border-color: Theme.border-1;
-                    for step in [5, 4, 3, 2, 1]: Rectangle {
-                        x: 5px;
-                        y: 8px + (5 - step) * 10px;
-                        width: 5px;
-                        height: 5px;
-                        border-radius: 2.5px;
-                        background: Theme.accent;
-                        opacity: step <= root.zoom ? 1 : 0.22;
-                    }
-                    dial-rtl-t := TouchArea {
-                        mouse-cursor: ns-resize;
-                        clicked => {
-                            root.zoom-to(5 - floor((self.mouse-y - 4px) / 10px));
-                        }
-                        scroll-event(e) => {
-                            root.zoom-to(e.delta-y > 0 ? root.zoom + 1 : root.zoom - 1);
-                            accept
-                        }
+                    zoom: root.zoom;
+                    zoom-to(n) => {
+                        root.zoom-to(n);
                     }
                 }
-                Rectangle {
+                GearButton {
                     y: (parent.height - self.height) / 2;
-                    width: 46px;
-                    height: 46px;
-                    border-radius: 10px;
-                    background: gear-rtl-t.has-hover ? Accent.soft : transparent;
-                    Path {
-                        width: 32px;
-                        height: 32px;
-                        viewbox-width: 24;
-                        viewbox-height: 24;
-                        commands: "M9.94 3.75 L9.82 0.23 L14.18 0.23 L14.06 3.75 A8.50 8.50 0 0 1 16.38 4.71 L18.78 2.14 L21.86 5.22 L19.29 7.62 A8.50 8.50 0 0 1 20.25 9.94 L23.77 9.82 L23.77 14.18 L20.25 14.06 A8.50 8.50 0 0 1 19.29 16.38 L21.86 18.78 L18.78 21.86 L16.38 19.29 A8.50 8.50 0 0 1 14.06 20.25 L14.18 23.77 L9.82 23.77 L9.94 20.25 A8.50 8.50 0 0 1 7.62 19.29 L5.22 21.86 L2.14 18.78 L4.71 16.38 A8.50 8.50 0 0 1 3.75 14.06 L0.23 14.18 L0.23 9.82 L3.75 9.94 A8.50 8.50 0 0 1 4.71 7.62 L2.14 5.22 L5.22 2.14 L7.62 4.71 Z M16.09 12.00 A4.09 4.09 0 1 0 7.91 12.00 A4.09 4.09 0 1 0 16.09 12.00 Z";
-                        fill: gear-rtl-t.has-hover ? Accent.strong : Theme.accent;
-                    }
-                    gear-rtl-t := TouchArea {
-                        mouse-cursor: pointer;
-                        clicked => {
-                            root.open-settings();
-                        }
+                    clicked => {
+                        root.open-settings();
                     }
                 }
             }
@@ -1164,55 +1212,17 @@ export component PopupWindow inherits Window {
 
             if !I18n.rtl: HorizontalLayout {
                 spacing: 8px;
-                Rectangle {
+                GearButton {
                     y: (parent.height - self.height) / 2;
-                    width: 46px;
-                    height: 46px;
-                    border-radius: 10px;
-                    background: gear-t.has-hover ? Accent.soft : transparent;
-                    Path {
-                        width: 32px;
-                        height: 32px;
-                        viewbox-width: 24;
-                        viewbox-height: 24;
-                        commands: "M9.94 3.75 L9.82 0.23 L14.18 0.23 L14.06 3.75 A8.50 8.50 0 0 1 16.38 4.71 L18.78 2.14 L21.86 5.22 L19.29 7.62 A8.50 8.50 0 0 1 20.25 9.94 L23.77 9.82 L23.77 14.18 L20.25 14.06 A8.50 8.50 0 0 1 19.29 16.38 L21.86 18.78 L18.78 21.86 L16.38 19.29 A8.50 8.50 0 0 1 14.06 20.25 L14.18 23.77 L9.82 23.77 L9.94 20.25 A8.50 8.50 0 0 1 7.62 19.29 L5.22 21.86 L2.14 18.78 L4.71 16.38 A8.50 8.50 0 0 1 3.75 14.06 L0.23 14.18 L0.23 9.82 L3.75 9.94 A8.50 8.50 0 0 1 4.71 7.62 L2.14 5.22 L5.22 2.14 L7.62 4.71 Z M16.09 12.00 A4.09 4.09 0 1 0 7.91 12.00 A4.09 4.09 0 1 0 16.09 12.00 Z";
-                        fill: gear-t.has-hover ? Accent.strong : Theme.accent;
-                    }
-                    gear-t := TouchArea {
-                        mouse-cursor: pointer;
-                        clicked => {
-                            root.open-settings();
-                        }
+                    clicked => {
+                        root.open-settings();
                     }
                 }
-                // .dial (ZoomDial.svelte): a vertical pill of five dots that
-                // fills from the bottom like a level meter.
-                Rectangle {
-                    width: 17px;
-                    height: 63px;
+                ZoomDial {
                     y: (parent.height - self.height) / 2;
-                    border-radius: self.width / 2;
-                    background: dial-t.has-hover ? Theme.surface-4 : Theme.surface-2;
-                    border-width: 1px;
-                    border-color: Theme.border-1;
-                    for step in [5, 4, 3, 2, 1]: Rectangle {
-                        x: 5px;
-                        y: 8px + (5 - step) * 10px;
-                        width: 5px;
-                        height: 5px;
-                        border-radius: 2.5px;
-                        background: Theme.accent;
-                        opacity: step <= root.zoom ? 1 : 0.22;
-                    }
-                    dial-t := TouchArea {
-                        mouse-cursor: ns-resize;
-                        clicked => {
-                            root.zoom-to(5 - floor((self.mouse-y - 4px) / 10px));
-                        }
-                        scroll-event(e) => {
-                            root.zoom-to(e.delta-y > 0 ? root.zoom + 1 : root.zoom - 1);
-                            accept
-                        }
+                    zoom: root.zoom;
+                    zoom-to(n) => {
+                        root.zoom-to(n);
                     }
                 }
             }

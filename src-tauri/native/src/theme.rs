@@ -164,25 +164,82 @@ const BACKDROP: Color = Color::from_rgb_u8(18, 20, 24);
 /// What the WebView windows had from DWM: undecorated, they kept the system
 /// shadow and, on Windows 11, rounded corners with the hairline border.
 /// With glass, also the acrylic backdrop, light or dark after the theme.
-pub fn frame(window: &slint::Window, light: bool) {
+///
+/// A window's first `show()` only queues the native window; all of this is
+/// applied once winit has made it (see `when_created`).
+pub fn frame<C: slint::ComponentHandle + 'static>(ui: &C, light: bool) {
+    when_created(ui, move |ui| {
+        use slint::winit_030::WinitWindowAccessor;
+        ui.window().with_winit_window(|w| {
+            use slint::winit_030::winit::platform::windows::{
+                BackdropType, CornerPreference, WindowExtWindows,
+            };
+            use slint::winit_030::winit::window::Theme as WinitTheme;
+            w.set_undecorated_shadow(true);
+            w.set_corner_preference(CornerPreference::Round);
+            if glass() {
+                // The acrylic follows the window's dark-mode attribute.
+                w.set_theme(Some(if light {
+                    WinitTheme::Light
+                } else {
+                    WinitTheme::Dark
+                }));
+                w.set_system_backdrop(BackdropType::TransientWindow);
+                extend_frame(w);
+            }
+        });
+    });
+}
+
+/// DWM draws a system backdrop only in the window frame. The WebView windows
+/// had it under the whole page; that takes the frame extended over all of the
+/// client area ("sheet of glass"), with the translucent pixels drawn on top.
+fn extend_frame(w: &slint::winit_030::winit::window::Window) {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::Graphics::Dwm::DwmExtendFrameIntoClientArea;
+    use windows::Win32::UI::Controls::MARGINS;
+    let Ok(handle) = w.window_handle() else {
+        return;
+    };
+    let RawWindowHandle::Win32(h) = handle.as_raw() else {
+        return;
+    };
+    let margins = MARGINS {
+        cxLeftWidth: -1,
+        cxRightWidth: -1,
+        cyTopHeight: -1,
+        cyBottomHeight: -1,
+    };
+    // FFI: our own live window and a margins struct on the stack.
+    let r = unsafe { DwmExtendFrameIntoClientArea(HWND(h.hwnd.get() as *mut _), &margins) };
+    if let Err(e) = r {
+        tracing::warn!("DwmExtendFrameIntoClientArea failed: {e}");
+    }
+}
+
+/// Runs `f` once the window has its native window: right away if it has one,
+/// otherwise when winit creates it (a new window's first `show()` only asks
+/// the event loop to).
+pub fn when_created<C: slint::ComponentHandle + 'static>(ui: &C, f: impl FnOnce(&C) + 'static) {
     use slint::winit_030::WinitWindowAccessor;
-    window.with_winit_window(|w| {
-        use slint::winit_030::winit::platform::windows::{
-            BackdropType, CornerPreference, WindowExtWindows,
+    if ui.window().has_winit_window() {
+        f(ui);
+        return;
+    }
+    tracing::debug!("no native window yet; applying once winit makes it");
+    let weak = ui.as_weak();
+    let spawned = slint::spawn_local(async move {
+        let Some(ui) = weak.upgrade() else {
+            return;
         };
-        use slint::winit_030::winit::window::Theme as WinitTheme;
-        w.set_undecorated_shadow(true);
-        w.set_corner_preference(CornerPreference::Round);
-        if glass() {
-            // The acrylic follows the window's dark-mode attribute.
-            w.set_theme(Some(if light {
-                WinitTheme::Light
-            } else {
-                WinitTheme::Dark
-            }));
-            w.set_system_backdrop(BackdropType::TransientWindow);
+        if ui.window().winit_window().await.is_ok() {
+            f(&ui);
         }
     });
+    if let Err(e) = spawned {
+        tracing::warn!("could not wait for the native window: {e}");
+    }
 }
 
 static GLASS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
