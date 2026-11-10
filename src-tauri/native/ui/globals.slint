@@ -43,6 +43,12 @@ export global Theme {
     // bg-1 over bg-0: the window's own opaque color, under a card's
     // translucent surface where something else would otherwise show through.
     in-out property <color> window-base: #0f1116;
+    // Glass: the GPU renderer draws the windows translucent and DWM puts the
+    // acrylic backdrop under them, as under the WebView windows. Off, the
+    // software renderer paints the tint below and masks rounded corners.
+    in-out property <bool> glass: false;
+    // A light theme: its acrylic is the light one.
+    in-out property <bool> light: false;
     // The WebView windows' acrylic tint, under everything (theme.rs).
     in-out property <color> backdrop: #121418;
     // --window-wash, rendered (wash.rs); stretched over a whole window.

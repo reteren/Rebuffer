@@ -606,7 +606,7 @@ impl Popup {
             tracing::error!("popup did not show: {e}");
             return;
         }
-        crate::theme::frame(window);
+        crate::theme::frame(window, self.ui.global::<Theme>().get_light());
         // Showing applies the size winit kept for the hidden window; put the
         // placed one back if that differs.
         if let Some((x, y, w, h)) = rect {

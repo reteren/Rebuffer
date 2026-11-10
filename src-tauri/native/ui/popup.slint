@@ -153,7 +153,18 @@ component Card inherits Rectangle {
     height: Layout.tile-h;
 
     // .card.current: box-shadow 0 0 0 2px accent, 0 0 12px -2px accent.
-    if data.current: Rectangle {
+    // Glass: the card is translucent over the window itself, so the ring is a
+    // border and nothing is painted under the card.
+    if data.current && Theme.glass: Rectangle {
+        x: -2px;
+        y: -2px;
+        width: parent.width + 4px;
+        height: parent.height + 4px;
+        border-radius: 12px;
+        border-width: 2px;
+        border-color: Theme.accent;
+    }
+    if data.current && !Theme.glass: Rectangle {
         x: -2px;
         y: -2px;
         width: parent.width + 4px;
@@ -187,6 +198,9 @@ component Card inherits Rectangle {
         y: 1px;
         width: parent.width - 2px;
         height: parent.height - 2px;
+        // The GPU renderer clips to this radius; the software one does not,
+        // and the mask below covers for it.
+        border-radius: 9px;
         clip: true;
 
         // -- preview, by kind ------------------------------------------------
@@ -413,7 +427,7 @@ component Card inherits Rectangle {
 
         // Rounded corners for the content: a ring of the color under the card,
         // since the software renderer clips to plain rectangles.
-        Rectangle {
+        if !Theme.glass: Rectangle {
             x: -10px;
             y: -10px;
             width: parent.width + 20px;
@@ -665,7 +679,7 @@ export component PopupWindow inherits Window {
     title: "Rebuffer";
     no-frame: true;
     always-on-top: true;
-    background: Theme.backdrop;
+    background: Theme.glass ? transparent : Theme.backdrop;
     preferred-width: 780px;
     preferred-height: 620px;
     // Explicit limits: left to the layout, one of the hand-placed layers

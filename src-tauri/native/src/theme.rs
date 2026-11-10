@@ -112,6 +112,8 @@ where
         theme.set_accent(c);
     }
     theme.set_backdrop(BACKDROP);
+    theme.set_glass(glass());
+    theme.set_light(css_of(name).contains("color-scheme: light"));
     theme.set_wash(crate::wash::render(css_of(name)));
     // What a window shows where nothing else is drawn: --bg over the acrylic.
     // The wash is left out here; under --bg it moves this by a few percent.
@@ -161,13 +163,37 @@ const BACKDROP: Color = Color::from_rgb_u8(18, 20, 24);
 
 /// What the WebView windows had from DWM: undecorated, they kept the system
 /// shadow and, on Windows 11, rounded corners with the hairline border.
-pub fn frame(window: &slint::Window) {
+/// With glass, also the acrylic backdrop, light or dark after the theme.
+pub fn frame(window: &slint::Window, light: bool) {
     use slint::winit_030::WinitWindowAccessor;
     window.with_winit_window(|w| {
-        use slint::winit_030::winit::platform::windows::{CornerPreference, WindowExtWindows};
+        use slint::winit_030::winit::platform::windows::{
+            BackdropType, CornerPreference, WindowExtWindows,
+        };
+        use slint::winit_030::winit::window::Theme as WinitTheme;
         w.set_undecorated_shadow(true);
         w.set_corner_preference(CornerPreference::Round);
+        if glass() {
+            // The acrylic follows the window's dark-mode attribute.
+            w.set_theme(Some(if light {
+                WinitTheme::Light
+            } else {
+                WinitTheme::Dark
+            }));
+            w.set_system_backdrop(BackdropType::TransientWindow);
+        }
     });
+}
+
+static GLASS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Whether the windows are drawn translucent (the GPU renderer came up).
+pub fn glass() -> bool {
+    GLASS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+pub fn set_glass(on: bool) {
+    GLASS.store(on, std::sync::atomic::Ordering::Relaxed);
 }
 
 /// `top` composited over an opaque `bottom` (source-over).

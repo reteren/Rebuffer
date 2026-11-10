@@ -63,6 +63,64 @@ fn snapshot_args() -> Option<Snapshot> {
     })
 }
 
+/// Whether this session can make an OpenGL context at all: the femtovg
+/// renderer only finds out when its first window is created, too late to
+/// fall back, so ask the driver up front with a throwaway window.
+fn gl_available() -> bool {
+    use windows::core::w;
+    use windows::Win32::Graphics::Gdi::{GetDC, ReleaseDC};
+    use windows::Win32::Graphics::OpenGL::{
+        wglCreateContext, wglDeleteContext, ChoosePixelFormat, SetPixelFormat, PFD_DOUBLEBUFFER,
+        PFD_DRAW_TO_WINDOW, PFD_SUPPORT_OPENGL, PFD_TYPE_RGBA, PIXELFORMATDESCRIPTOR,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, DestroyWindow, WINDOW_EX_STYLE, WS_POPUP,
+    };
+    // FFI: a hidden STATIC window of our own, its DC, a pixel format and a
+    // context; every one is released before returning.
+    unsafe {
+        let Ok(hwnd) = CreateWindowExW(
+            WINDOW_EX_STYLE(0),
+            w!("STATIC"),
+            w!(""),
+            WS_POPUP,
+            0,
+            0,
+            1,
+            1,
+            None,
+            None,
+            None,
+            None,
+        ) else {
+            return false;
+        };
+        let dc = GetDC(Some(hwnd));
+        let pfd = PIXELFORMATDESCRIPTOR {
+            nSize: std::mem::size_of::<PIXELFORMATDESCRIPTOR>() as u16,
+            nVersion: 1,
+            dwFlags: PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
+            iPixelType: PFD_TYPE_RGBA,
+            cColorBits: 32,
+            cAlphaBits: 8,
+            ..Default::default()
+        };
+        let format = ChoosePixelFormat(dc, &pfd);
+        let mut ok = format != 0 && SetPixelFormat(dc, format, &pfd).is_ok();
+        if ok {
+            match wglCreateContext(dc) {
+                Ok(ctx) => {
+                    let _ = wglDeleteContext(ctx);
+                }
+                Err(_) => ok = false,
+            }
+        }
+        ReleaseDC(Some(hwnd), dc);
+        let _ = DestroyWindow(hwnd);
+        ok
+    }
+}
+
 fn main() {
     if std::env::args().any(|a| a == "--notify-test") {
         notify::self_test();
@@ -86,17 +144,32 @@ fn main() {
         return;
     }
 
-    slint::BackendSelector::new()
-        .backend_name("winit".into())
-        .renderer_name("software".into())
-        // A tray app: its windows never get a taskbar button, as in the
-        // WebView build. The settings window will opt back in when it exists.
-        .with_winit_window_attributes_hook(move |attributes| {
-            use slint::winit_030::winit::platform::windows::WindowAttributesExtWindows;
-            attributes.with_skip_taskbar(true).with_active(!inactive)
-        })
-        .select()
-        .expect("the winit backend with the software renderer is compiled in");
+    // Glass first: the GPU renderer draws translucent windows that DWM backs
+    // with acrylic, as it did the WebView ones. Where OpenGL is missing (a
+    // remote session, a broken driver), or REBUFFER_RENDERER=software asks
+    // for it, the software renderer draws them opaque instead.
+    let want_glass = std::env::var("REBUFFER_RENDERER").as_deref() != Ok("software");
+    let selector = |renderer: &str, transparent: bool| {
+        slint::BackendSelector::new()
+            .backend_name("winit".into())
+            .renderer_name(renderer.into())
+            // A tray app: its windows never get a taskbar button, as in the
+            // WebView build.
+            .with_winit_window_attributes_hook(move |attributes| {
+                use slint::winit_030::winit::platform::windows::WindowAttributesExtWindows;
+                attributes
+                    .with_skip_taskbar(true)
+                    .with_active(!inactive)
+                    .with_transparent(transparent)
+            })
+            .select()
+    };
+    let glass = want_glass && gl_available() && selector("femtovg", true).is_ok();
+    if !glass {
+        selector("software", false)
+            .expect("the winit backend with the software renderer is compiled in");
+    }
+    theme::set_glass(glass);
 
     notify::init();
     let host = Arc::new(host::NativeHost);
@@ -115,6 +188,11 @@ fn main() {
         }
     };
 
+    // Logged here: the log file opens with the core.
+    tracing::info!(
+        "renderer: {}",
+        if glass { "femtovg (glass)" } else { "software" }
+    );
     if let Err(e) = popup::init(core.clone()) {
         instance::refuse(&format!("Rebuffer could not create its window: {e}"));
         return;

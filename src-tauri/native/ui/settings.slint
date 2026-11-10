@@ -628,7 +628,7 @@ component ThemeTile inherits Rectangle {
 export component SettingsWindow inherits Window {
     title: "Rebuffer";
     icon: @image-url("../../icons/32x32.png");
-    background: Theme.backdrop;
+    background: Theme.glass ? transparent : Theme.backdrop;
     // Undecorated, as the WebView window was: DWM gives it the shadow and the
     // rounded corners (theme::frame), and a click elsewhere puts it away.
     no-frame: true;
@@ -1056,7 +1056,7 @@ export component SettingsWindow inherits Window {
                                     // Rounded ends: the clip is rectangular in the
                                     // software renderer, so mask the corners with
                                     // the panel's own color (surface-1 over the window).
-                                    Rectangle {
+                                    if !Theme.glass: Rectangle {
                                         x: -7px;
                                         y: -7px;
                                         width: parent.width + 14px;

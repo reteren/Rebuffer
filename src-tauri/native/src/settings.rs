@@ -98,7 +98,10 @@ pub fn open(core: Rc<Core>) {
         tracing::error!("settings window did not show: {e}");
         return;
     }
-    crate::theme::frame(window.ui.window());
+    crate::theme::frame(
+        window.ui.window(),
+        window.ui.global::<crate::ui::Theme>().get_light(),
+    );
     // Centred on the monitor it opens on, like the WebView window's
     // `.center()`. It stays off the taskbar, as that one did.
     window.ui.window().with_winit_window(|w| {
