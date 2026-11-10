@@ -211,10 +211,43 @@ fn extend_frame(w: &slint::winit_030::winit::window::Window) {
         cyTopHeight: -1,
         cyBottomHeight: -1,
     };
+    let hwnd = HWND(h.hwnd.get() as *mut _);
     // FFI: our own live window and a margins struct on the stack.
-    let r = unsafe { DwmExtendFrameIntoClientArea(HWND(h.hwnd.get() as *mut _), &margins) };
+    let r = unsafe { DwmExtendFrameIntoClientArea(hwnd, &margins) };
     if let Err(e) = r {
         tracing::warn!("DwmExtendFrameIntoClientArea failed: {e}");
+    }
+    hide_caption_buttons(hwnd);
+}
+
+/// Over an extended frame DWM paints the system minimise/maximise/close
+/// buttons of a window that has a system menu; ours draw their own. winit
+/// always sets WS_SYSMENU and puts it back whenever it restyles the window
+/// (showing it, for one), so this runs after every show.
+fn hide_caption_buttons(hwnd: windows::Win32::Foundation::HWND) {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, GWL_STYLE, SWP_FRAMECHANGED,
+        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, WS_MAXIMIZEBOX, WS_MINIMIZEBOX,
+        WS_SYSMENU,
+    };
+    let strip = (WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX).0 as isize;
+    // FFI: our own live window; only style bits are changed, then the frame
+    // is recomputed in place.
+    unsafe {
+        let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+        if style & strip == 0 {
+            return;
+        }
+        SetWindowLongPtrW(hwnd, GWL_STYLE, style & !strip);
+        let _ = SetWindowPos(
+            hwnd,
+            None,
+            0,
+            0,
+            0,
+            0,
+            SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+        );
     }
 }
 
