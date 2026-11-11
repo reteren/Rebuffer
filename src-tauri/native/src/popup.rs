@@ -235,6 +235,8 @@ struct Popup {
     /// A reload is already scheduled; events arriving meanwhile join it.
     reload_queued: Cell<bool>,
     ctrl_down: Cell<bool>,
+    /// A column check for a resize is already queued.
+    resize_queued: Cell<bool>,
     animation: slint::Timer,
 }
 
@@ -285,6 +287,7 @@ pub fn init(core: Rc<Core>) -> Result<(), slint::PlatformError> {
         stale: Cell::new(true),
         reload_queued: Cell::new(false),
         ctrl_down: Cell::new(false),
+        resize_queued: Cell::new(false),
         animation: slint::Timer::default(),
     });
     POPUP.with(|p| *p.borrow_mut() = Some(popup.clone()));
@@ -383,10 +386,19 @@ fn wire_window_events(ui: &PopupWindow) {
             });
             EventResult::Propagate
         }
+        // A border drag sends a Resized per mouse move: queue one column
+        // check for the lot, and leave the rows alone unless the count of
+        // cards across changed (the cards keep their width; Slint re-lays
+        // the rest by itself).
         WindowEvent::Resized(_) => {
-            let _ = slint::invoke_from_event_loop(|| {
-                with(|p| p.reflow());
-            });
+            if with(|p| !p.resize_queued.replace(true)).unwrap_or(false) {
+                let _ = slint::invoke_from_event_loop(|| {
+                    with(|p| {
+                        p.resize_queued.set(false);
+                        p.update_columns();
+                    });
+                });
+            }
             EventResult::Propagate
         }
         WindowEvent::ModifiersChanged(m) => {
@@ -980,8 +992,16 @@ impl Popup {
     }
 
     /// Recomputes how many cards fit across, and re-lays the rows if that
-    /// changed.
+    /// changed; otherwise refreshes them in place.
     fn reflow(&self) {
+        if !self.update_columns() {
+            self.rows.notify.reset();
+        }
+    }
+
+    /// Recomputes how many cards fit across and re-lays the rows if that
+    /// changed. Returns whether it did.
+    fn update_columns(&self) -> bool {
         let window = self.ui.window();
         let width = window.size().to_logical(window.scale_factor()).width;
         let zoom = self.view.borrow().zoom;
@@ -990,12 +1010,12 @@ impl Popup {
         // --grid-pad on both sides of the cards.
         let inner = width - VIEWPORT_SIDE * 2.0 - SCROLLBAR - PAD * 2.0 + GAP;
         let columns = ((inner / pitch).floor() as usize).max(1);
-        if self.view.borrow().columns != columns {
-            self.view.borrow_mut().columns = columns;
-            self.rebuild_rows();
-        } else {
-            self.rows.notify.reset();
+        if self.view.borrow().columns == columns {
+            return false;
         }
+        self.view.borrow_mut().columns = columns;
+        self.rebuild_rows();
+        true
     }
 
     /// Lays the loaded items out as rows: under day headers for the two date
