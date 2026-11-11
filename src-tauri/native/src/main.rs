@@ -11,6 +11,7 @@
 // Release builds must not open a console window behind the tray app.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod edges;
 mod host;
 mod i18n;
 mod instance;

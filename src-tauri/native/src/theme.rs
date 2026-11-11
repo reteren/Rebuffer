@@ -177,6 +177,9 @@ pub fn frame<C: slint::ComponentHandle + 'static>(ui: &C, light: bool) {
             use slint::winit_030::winit::window::Theme as WinitTheme;
             w.set_undecorated_shadow(true);
             w.set_corner_preference(CornerPreference::Round);
+            if let Some(hwnd) = hwnd_of(w) {
+                crate::edges::install(hwnd);
+            }
             if glass() {
                 // The acrylic follows the window's dark-mode attribute.
                 w.set_theme(Some(if light {
@@ -195,14 +198,9 @@ pub fn frame<C: slint::ComponentHandle + 'static>(ui: &C, light: bool) {
 /// had it under the whole page; that takes the frame extended over all of the
 /// client area ("sheet of glass"), with the translucent pixels drawn on top.
 fn extend_frame(w: &slint::winit_030::winit::window::Window) {
-    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-    use windows::Win32::Foundation::HWND;
     use windows::Win32::Graphics::Dwm::DwmExtendFrameIntoClientArea;
     use windows::Win32::UI::Controls::MARGINS;
-    let Ok(handle) = w.window_handle() else {
-        return;
-    };
-    let RawWindowHandle::Win32(h) = handle.as_raw() else {
+    let Some(hwnd) = hwnd_of(w) else {
         return;
     };
     let margins = MARGINS {
@@ -211,13 +209,24 @@ fn extend_frame(w: &slint::winit_030::winit::window::Window) {
         cyTopHeight: -1,
         cyBottomHeight: -1,
     };
-    let hwnd = HWND(h.hwnd.get() as *mut _);
     // FFI: our own live window and a margins struct on the stack.
     let r = unsafe { DwmExtendFrameIntoClientArea(hwnd, &margins) };
     if let Err(e) = r {
         tracing::warn!("DwmExtendFrameIntoClientArea failed: {e}");
     }
     hide_caption_buttons(hwnd);
+}
+
+/// The native handle of a winit window.
+fn hwnd_of(
+    w: &slint::winit_030::winit::window::Window,
+) -> Option<windows::Win32::Foundation::HWND> {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let handle = w.window_handle().ok()?;
+    match handle.as_raw() {
+        RawWindowHandle::Win32(h) => Some(windows::Win32::Foundation::HWND(h.hwnd.get() as *mut _)),
+        _ => None,
+    }
 }
 
 /// Over an extended frame DWM paints the system minimise/maximise/close
