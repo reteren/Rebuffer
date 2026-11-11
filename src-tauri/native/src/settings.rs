@@ -96,15 +96,13 @@ pub fn open(core: Rc<Core>) {
         )
         .into(),
     );
-    let shown = window
-        .reveal
-        .show(&window.ui, || match window.ui.show() {
-            Ok(()) => true,
-            Err(e) => {
-                tracing::error!("settings window did not show: {e}");
-                false
-            }
-        });
+    let shown = window.reveal.show(&window.ui, || match window.ui.show() {
+        Ok(()) => true,
+        Err(e) => {
+            tracing::error!("settings window did not show: {e}");
+            false
+        }
+    });
     if !shown {
         return;
     }
