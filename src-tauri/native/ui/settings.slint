@@ -9,6 +9,7 @@
 // what is purely visual (which section is open, a pending confirmation).
 
 import { ScrollView, AboutSlint } from "std-widgets.slint";
+import { ScrollThumb } from "scrollbar.slint";
 import { Theme, I18n } from "globals.slint";
 
 export struct SettingsData {
@@ -795,11 +796,13 @@ export component SettingsWindow inherits Window {
             }
         }
 
-        ScrollView {
+        page := ScrollView {
             x: I18n.rtl ? 0 : 180px;
             y: 58px;
             width: parent.width - 180px;
             height: parent.height - 58px;
+            vertical-scrollbar-policy: always-off;
+            horizontal-scrollbar-policy: always-off;
             VerticalLayout {
                 alignment: start;
 
@@ -1713,6 +1716,14 @@ export component SettingsWindow inherits Window {
                     }
                 }
             }
+        }
+        ScrollThumb {
+            x: I18n.rtl ? page.x : page.x + page.width - self.width;
+            y: page.y;
+            height: page.height;
+            value <=> page.content-y;
+            content-height: page.content-height;
+            visible-height: page.visible-height;
         }
     }
 

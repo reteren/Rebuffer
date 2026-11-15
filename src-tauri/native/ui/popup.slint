@@ -8,6 +8,7 @@
 // the comment names the CSS rule it came from.
 
 import { ListView } from "std-widgets.slint";
+import { ScrollThumb } from "scrollbar.slint";
 import { Theme, I18n } from "globals.slint";
 export { Theme, I18n }
 
@@ -800,6 +801,11 @@ export component PopupWindow inherits Window {
     in-out property <string> rename-text;
     in-out property <length> scroll-y <=> list.content-y;
     out property <length> list-height: list.visible-height;
+    out property <length> list-content-height: list.content-height;
+    // Middle-click autoscroll (popup.rs): the anchor mark, where it was set.
+    in property <bool> autoscroll;
+    in property <length> autoscroll-x;
+    in property <length> autoscroll-y;
     property <length> menu-x;
     property <length> menu-y;
     property <length> sort-x;
@@ -1067,6 +1073,8 @@ export component PopupWindow inherits Window {
                 y: 4px;
                 width: parent.width - 24px;
                 height: parent.height - 12px;
+                vertical-scrollbar-policy: always-off;
+                horizontal-scrollbar-policy: always-off;
                 for row in root.rows: VerticalLayout {
                     padding-top: row.first ? Layout.pad : 0;
                     // .group-header: a pill chip, 4px in from the grid edge.
@@ -1120,6 +1128,15 @@ export component PopupWindow inherits Window {
                         }
                     }
                 }
+            }
+
+            ScrollThumb {
+                x: I18n.rtl ? list.x : list.x + list.width - self.width;
+                y: list.y;
+                height: list.height;
+                value <=> list.content-y;
+                content-height: list.content-height;
+                visible-height: list.visible-height;
             }
 
             // .empty: a soft accent glow behind the title and the hint.
@@ -1237,6 +1254,30 @@ export component PopupWindow inherits Window {
         tint: root.banner-is-error ? #f7768e : Theme.accent;
         dismiss => {
             root.dismiss-banner();
+        }
+    }
+
+    // The middle-click autoscroll anchor, as browsers draw it: a disc with
+    // an arrow up and an arrow down around a dot, where the wheel was pressed.
+    if root.autoscroll: Rectangle {
+        x: root.autoscroll-x - self.width / 2;
+        y: root.autoscroll-y - self.height / 2;
+        width: 30px;
+        height: 30px;
+        border-radius: self.width / 2;
+        background: Theme.surface-3;
+        border-width: 1px;
+        border-color: Theme.border-3;
+        drop-shadow-color: #00000066;
+        drop-shadow-blur: 6px;
+        drop-shadow-offset-y: 1px;
+        Path {
+            width: 100%;
+            height: 100%;
+            viewbox-width: 30;
+            viewbox-height: 30;
+            fill: Theme.text-2;
+            commands: "M15 5 L19.5 10.5 L10.5 10.5 Z M15 25 L19.5 19.5 L10.5 19.5 Z M17 15 A2 2 0 1 1 13 15 A2 2 0 1 1 17 15 Z";
         }
     }
 

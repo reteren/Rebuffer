@@ -1,0 +1,60 @@
+// The scrollbar of the WebView build (global.css ::-webkit-scrollbar): a 12px
+// gutter with no track, the thumb a pill inset 3px on each side, colored
+// border-3 and text-3 under the pointer. Laid over a ScrollView whose own bar
+// is turned off, and bound to its content-y.
+
+import { Theme } from "globals.slint";
+
+export component ScrollThumb {
+    // The scrolled view's content-y (0 at the top, negative further down).
+    in-out property <length> value;
+    in property <length> content-height;
+    in property <length> visible-height;
+
+    property <length> maximum: max(0px, root.content-height - root.visible-height);
+    property <length> thumb-height: root.maximum <= 0 ? 0 : max(28px, root.height * root.visible-height / root.content-height);
+    property <length> travel: root.height - root.thumb-height;
+    property <length> thumb-y: root.maximum <= 0 ? 0 : clamp(-root.value / root.maximum, 0, 1) * root.travel;
+    property <bool> dragging;
+    property <length> drag-from;
+    property <bool> over-thumb: touch.has-hover && touch.mouse-y >= root.thumb-y && touch.mouse-y < root.thumb-y + root.thumb-height;
+
+    width: 12px;
+    visible: root.maximum > 0;
+
+    Rectangle {
+        x: 3px;
+        y: root.thumb-y;
+        width: parent.width - 6px;
+        height: root.thumb-height;
+        border-radius: self.width / 2;
+        background: root.dragging || root.over-thumb ? Theme.text-3 : Theme.border-3;
+        animate background { duration: 120ms; }
+    }
+
+    touch := TouchArea {
+        pointer-event(e) => {
+            if e.button != PointerEventButton.left {
+                return;
+            }
+            if e.kind == PointerEventKind.down {
+                if self.mouse-y >= root.thumb-y && self.mouse-y < root.thumb-y + root.thumb-height {
+                    root.dragging = true;
+                    root.drag-from = root.value;
+                } else {
+                    // A click on the gutter pages toward it, as browsers do.
+                    root.value = self.mouse-y < root.thumb-y
+                        ? min(0px, root.value + root.visible-height)
+                        : max(-root.maximum, root.value - root.visible-height);
+                }
+            } else if e.kind == PointerEventKind.up {
+                root.dragging = false;
+            }
+        }
+        moved => {
+            if root.dragging && root.travel > 0 {
+                root.value = clamp(root.drag-from - (self.mouse-y - self.pressed-y) * root.maximum / root.travel, -root.maximum, 0px);
+            }
+        }
+    }
+}

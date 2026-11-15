@@ -238,6 +238,7 @@ struct Popup {
     /// A column check for a resize is already queued.
     resize_queued: Cell<bool>,
     animation: slint::Timer,
+    autoscroll: crate::autoscroll::Autoscroll,
 }
 
 thread_local! {
@@ -277,6 +278,7 @@ pub fn init(core: Rc<Core>) -> Result<(), slint::PlatformError> {
     wire_window_events(&ui);
 
     let reveal = crate::reveal::Reveal::install(ui.window());
+    let autoscroll = crate::autoscroll::Autoscroll::new(&ui);
     let popup = Rc::new(Popup {
         ui,
         reveal,
@@ -289,6 +291,7 @@ pub fn init(core: Rc<Core>) -> Result<(), slint::PlatformError> {
         ctrl_down: Cell::new(false),
         resize_queued: Cell::new(false),
         animation: slint::Timer::default(),
+        autoscroll,
     });
     POPUP.with(|p| *p.borrow_mut() = Some(popup.clone()));
     popup.apply_settings();
@@ -376,10 +379,20 @@ fn wire_callbacks(ui: &PopupWindow) {
 }
 
 fn wire_window_events(ui: &PopupWindow) {
+    ui.window().on_winit_window_event(|window, event| {
+        let scale = window.scale_factor();
+        if let Some(result) = with(|p| p.autoscroll.handle(event, scale)).flatten() {
+            return result;
+        }
+        window_event(event)
+    });
+}
+
+fn window_event(event: &winit::event::WindowEvent) -> EventResult {
     use winit::event::{ElementState, MouseScrollDelta, WindowEvent};
     use winit::keyboard::{Key, NamedKey};
 
-    ui.window().on_winit_window_event(|_, event| match event {
+    match event {
         WindowEvent::Focused(false) => {
             let _ = slint::invoke_from_event_loop(|| {
                 with(|p| p.focus_lost());
@@ -441,7 +454,7 @@ fn wire_window_events(ui: &PopupWindow) {
             }
         }
         _ => EventResult::Propagate,
-    });
+    }
 }
 
 /// Shows the popup if hidden, hides it if shown (the hotkey toggles).
@@ -659,6 +672,7 @@ impl Popup {
             return;
         }
         self.ui.set_renaming(false);
+        self.autoscroll.stop();
         if let Err(e) = self.ui.hide() {
             tracing::warn!("popup did not hide: {e}");
         }
